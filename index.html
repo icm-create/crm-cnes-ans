@@ -309,6 +309,7 @@ function buildCnesTratada(tbEstabelecimentoRows, deParas){
 function buildCrmContas(rawRows){
   return rawRows.map(r => ({
     Conta_ID: r.Conta_ID != null ? String(r.Conta_ID) : null,
+    CNES: r.CNES != null ? String(r.CNES).trim() : "",
     CPF: r.CPF || "",
     CNPJ: r.CNPJ != null ? String(r.CNPJ) : "",
     "UF/Província": r["UF/Província"] || null,
@@ -390,6 +391,8 @@ function matchCandidates(crmRows, cnesRows){
   }
 
   for (const crmAcc of crmRows){
+    const semCnes = !crmAcc.CNES || crmAcc.CNES === "0" || crmAcc.CNES === "-";
+    if (!semCnes) continue; // só procura candidato pra conta que ainda não tem CNES no CRM
     if (crmAcc.CNPJ) (byCnpj.get(crmAcc.CNPJ) || []).forEach(c => tryMatch(crmAcc, c));
     if (crmAcc.CPF) (byCpf.get(crmAcc.CPF) || []).forEach(c => tryMatch(crmAcc, c));
     if (crmAcc.Logradouro) (byEndereco.get(crmAcc.Logradouro) || []).forEach(c => tryMatch(crmAcc, c));
