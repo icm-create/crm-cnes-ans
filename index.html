@@ -2,10 +2,18 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>LOCALIZAR CNES DE CONTAS CRM</title>
+<title>CNES-CRM</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
+
+  .app-nav{background:#0c1c2c;display:flex;gap:2px;padding:0 20px}
+  .app-nav button{background:transparent;color:#9db3c8;border:none;border-bottom:3px solid transparent;padding:12px 16px;font-size:13px;font-weight:600;cursor:pointer;border-radius:0}
+  .app-nav button.active{color:#fff;border-bottom-color:#2d6cdf}
+  .view{display:none}
+  .view.active{display:block}
+
+
   :root{
     --cnes-bg:#e3f0fb; --cnes-fg:#0b4a7a; --cnes-border:#b7d9f0;
     --crm-bg:#e6f5e9;  --crm-fg:#1c5e2e;  --crm-border:#bfe2c7;
@@ -17,6 +25,13 @@
   header h1{font-size:18px;margin:0;font-weight:600}
   header .status{font-size:13px;opacity:.85}
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .large-panel{background:#fff;border:1px solid #e2e2e2;border-radius:8px;padding:12px 16px;margin:10px 20px 0}
+  .large-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px}
+  .large-row:last-child{border-bottom:none}
+  .large-row-name{flex:0 0 240px;font-weight:600}
+  .large-row-status{flex:1;color:#888}
+  .large-row-status.ok{color:#1c5e2e;font-weight:600}
+  .btn-secondary-sm{background:#fff;color:#14293d;border:1px solid #ccc;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center}
   button{cursor:pointer;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:600}
   .btn-primary{background:#2d6cdf;color:#fff}
   .btn-primary:disabled{background:#9fb6d9;cursor:not-allowed}
@@ -57,9 +72,65 @@
   .legend{display:flex;gap:14px;align-items:center;font-size:12px;margin:0 0 10px}
   .legend span{display:inline-flex;align-items:center;gap:6px}
   .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+
+  :root{
+    --cnes-bg:#e3f0fb; --cnes-fg:#0b4a7a; --cnes-border:#b7d9f0;
+    --crm-bg:#e6f5e9;  --crm-fg:#1c5e2e;  --crm-border:#bfe2c7;
+    --final-bg:#f3e8fd; --final-fg:#5b21a6; --final-border:#ddc6f5;
+  }
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f7f8fa;color:#1c1c1c}
+  header{background:#14293d;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  header h1{font-size:18px;margin:0;font-weight:600}
+  header .status{font-size:13px;opacity:.85}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{cursor:pointer;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:600}
+  .btn-primary{background:#2d6cdf;color:#fff}
+  .btn-primary:disabled{background:#9fb6d9;cursor:not-allowed}
+  .btn-secondary{background:#fff;color:#14293d;border:1px solid #ccc}
+  .btn-green-outline{background:#fff;color:#1c5e2e;border:1px solid #bfe2c7}
+  .panel{background:#fff;border-bottom:1px solid #e2e2e2;padding:12px 20px}
+  .panel .row{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:13px}
+  .file-status{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .file-chip{font-size:11.5px;padding:3px 9px;border-radius:20px;background:#eee;color:#555}
+  .file-chip.ok{background:#d9f2df;color:#1c5e2e}
+  .large-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px}
+  .large-row:last-child{border-bottom:none}
+  .large-row-name{flex:0 0 240px;font-weight:600}
+  .large-row-status{flex:1;color:#888}
+  .large-row-status.ok{color:#1c5e2e;font-weight:600}
+  .btn-secondary-sm{background:#fff;color:#14293d;border:1px solid #ccc;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center}
+  .main{padding:16px 20px}
+  .summary{display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap}
+  .summary .card{background:#fff;border:1px solid #e2e2e2;border-radius:8px;padding:10px 16px;font-size:13px}
+  .summary .card b{display:block;font-size:20px}
+  .table-wrap{overflow:auto;max-height:70vh;border:1px solid #e2e2e2;border-radius:8px;background:#fff}
+  table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}
+  thead th{position:sticky;top:0;z-index:2;padding:6px 8px;text-align:left;border-bottom:2px solid #ccc}
+  th.grp-cnes{background:var(--cnes-bg);color:var(--cnes-fg)}
+  th.grp-crm{background:var(--crm-bg);color:var(--crm-fg)}
+  th.grp-final{background:var(--final-bg);color:var(--final-fg)}
+  th select{font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid #ccc;margin-top:3px;width:100%}
+  tbody td{padding:5px 8px;border-bottom:1px solid #eee}
+  td.grp-cnes{background:#f5fafd}
+  td.grp-crm{background:#f6fbf7}
+  td.grp-final{background:#faf6fe;font-weight:600}
+  .col-title{font-weight:700;display:block}
+  .empty-state{padding:60px 20px;text-align:center;color:#777}
+  .cfg-note{font-size:11px;color:#888;line-height:1.5}
+
 </style>
 </head>
 <body>
+
+<nav class="app-nav">
+  <button id="navLocalizar" class="active">Localizar CNES de Contas CRM</button>
+  <button id="navAtualizar">Atualizar Contas CRM</button>
+</nav>
+
+<div id="view-localizar" class="view active">
+
 
 <header>
   <div>
@@ -67,15 +138,14 @@
     <div class="status" id="statusLine">Pronto — sem login necessário</div>
   </div>
   <div class="toolbar">
-    <label class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
-      Selecionar tabela CNES
-      <input type="file" id="fileCnesInput" accept=".csv" style="display:none">
-    </label>
-    <span id="cnesFileLabel" style="font-size:12px;opacity:.85">nenhum arquivo selecionado</span>
-    <button id="btnLoad" class="btn-primary">Atualizar</button>
+    <button id="btnLoadAll" class="btn-primary">Atualizar tudo</button>
+    <button id="btnLoadCrmOnly" class="btn-secondary">Atualizar tabelas CRM</button>
+    <button id="btnToggleLargePanel" class="btn-secondary">Incluir tabelas grandes</button>
     <button id="btnExport" class="btn-green-outline" disabled>Exportar Incluir (.xlsx)</button>
   </div>
 </header>
+
+<div class="large-panel" id="largeFilesPanel" style="display:none"></div>
 
 <div class="layout">
   <aside class="sidebar">
@@ -141,9 +211,52 @@
   </main>
 </div>
 
+
+</div>
+
+<div id="view-atualizar" class="view">
+
+
+<header>
+  <div>
+    <h1>ATUALIZAR CONTAS CRM</h1>
+    <div class="status" id="a_statusLine">Selecione as tabelas grandes e clique em Atualizar</div>
+  </div>
+  <div class="toolbar">
+    <button id="a_btnLoadAll" class="btn-primary">Atualizar tudo</button>
+    <button id="a_btnLoadCrmOnly" class="btn-secondary">Atualizar tabelas CRM</button>
+    <button id="a_btnToggleLargePanel" class="btn-secondary">Incluir tabelas grandes</button>
+    <button id="a_btnExport" class="btn-green-outline" disabled>Exportar (.xlsx)</button>
+  </div>
+</header>
+
+<div class="panel" id="a_largeFilesPanel" style="display:none">
+  <div class="row">
+    <span class="cfg-note">Selecione, uma a uma, as tabelas grandes abaixo (sem renomear nada — mesmo com sufixo de mês/ano no nome).</span>
+  </div>
+  <div id="a_largeFilesRows"></div>
+</div>
+
+
+<div class="main">
+  <div class="summary" id="a_summary" style="display:none">
+    <div class="card"><b id="a_sumTotal">0</b>contas com CNES cruzado</div>
+  </div>
+  <div class="table-wrap">
+    <div class="empty-state" id="a_emptyState">Selecione as tabelas grandes acima e clique em "Atualizar".</div>
+    <table id="a_mainTable" style="display:none">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+
+</div>
+
 <script>
 /* =========================================================================
-   CONFIG — preencha antes de publicar (sem login: tudo por link público)
+   CONFIG compartilhado pelas duas telas
    ========================================================================= */
 const CONFIG = {
   // URL do Apps Script publicado como Web App (Implantar → Nova implantação →
@@ -153,25 +266,81 @@ const CONFIG = {
 };
 
 /* =========================================================================
+   Navegação entre telas
+   ========================================================================= */
+document.getElementById("navLocalizar").addEventListener("click", () => {
+  document.getElementById("view-localizar").classList.add("active");
+  document.getElementById("view-atualizar").classList.remove("active");
+  document.getElementById("navLocalizar").classList.add("active");
+  document.getElementById("navAtualizar").classList.remove("active");
+});
+document.getElementById("navAtualizar").addEventListener("click", () => {
+  document.getElementById("view-atualizar").classList.add("active");
+  document.getElementById("view-localizar").classList.remove("active");
+  document.getElementById("navAtualizar").classList.add("active");
+  document.getElementById("navLocalizar").classList.remove("active");
+});
+</script>
+
+<script>
+(function(){
+
+/* =========================================================================
    Estado
    ========================================================================= */
 let allRows = [];          // linhas processadas (candidatos)
 let rowDecisions = {};     // key -> "Incluir" | "Desconsiderar"
 let existingDesconsideradas = new Set(); // chaves já gravadas em execuções anteriores
-let cnesFile = null;       // File selecionado manualmente (tbEstabelecimento)
+let cnesTratadaCache = null; // resultado da última montagem completa do lado CNES (para "Atualizar tabelas CRM")
 
 const $ = (id) => document.getElementById(id);
 
 function setStatus(msg){ $("statusLine").textContent = msg; }
 
 /* =========================================================================
-   Seleção manual do arquivo grande do CNES (tbEstabelecimento)
+   Seleção manual das tabelas grandes (painel "Incluir tabelas grandes")
    ========================================================================= */
-$("fileCnesInput").addEventListener("change", (ev) => {
-  const f = ev.target.files[0];
-  if (!f) return;
-  cnesFile = f;
-  $("cnesFileLabel").textContent = f.name;
+const LARGE_SOURCES = [
+  { chave: "tbEstabelecimento", prefixo: "tbEstabelecimento" }
+];
+let largeFiles = {};
+
+function renderLargePanel(){
+  const panel = $("largeFilesPanel");
+  panel.innerHTML = "";
+  LARGE_SOURCES.forEach(s => {
+    const row = document.createElement("div");
+    row.className = "large-row";
+    const name = document.createElement("span");
+    name.className = "large-row-name";
+    name.textContent = s.chave;
+    const status = document.createElement("span");
+    status.className = "large-row-status" + (largeFiles[s.chave] ? " ok" : "");
+    status.textContent = largeFiles[s.chave] ? `✓ ${largeFiles[s.chave].name}` : "— nenhum arquivo selecionado";
+    const label = document.createElement("label");
+    label.className = "btn-secondary-sm";
+    label.textContent = "Selecionar arquivo";
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = ".csv"; input.style.display = "none";
+    input.addEventListener("change", (ev) => {
+      const f = ev.target.files[0];
+      if (!f) return;
+      if (f.name.indexOf(s.prefixo) !== 0){
+        setStatus(`Aviso: o arquivo selecionado não começa com "${s.prefixo}" — confirme se é o certo.`);
+      }
+      largeFiles[s.chave] = f;
+      renderLargePanel();
+    });
+    label.appendChild(input);
+    row.appendChild(name); row.appendChild(status); row.appendChild(label);
+    panel.appendChild(row);
+  });
+}
+renderLargePanel();
+
+$("btnToggleLargePanel").addEventListener("click", () => {
+  const panel = $("largeFilesPanel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
 });
 
 function readFileAsArrayBuffer(file){
@@ -425,12 +594,12 @@ async function formSubmitDesconsiderar(contaId, cnes){
 /* =========================================================================
    Carregar tudo
    ========================================================================= */
-$("btnLoad").addEventListener("click", async () => {
-  if (!cnesFile){
-    setStatus("Selecione primeiro a tabela CNES (botão \"Selecionar tabela CNES\").");
+$("btnLoadAll").addEventListener("click", async () => {
+  if (!largeFiles["tbEstabelecimento"]){
+    setStatus("Selecione primeiro a tabela CNES em \"Incluir tabelas grandes\".");
     return;
   }
-  $("btnLoad").disabled = true;
+  $("btnLoadAll").disabled = true; $("btnLoadCrmOnly").disabled = true;
   try{
     setStatus("Lendo tabelas de/para e base do CRM...");
     const [dpTipoUnidadeF, dpMunicipioF, dpMotivoF, crmFile] = await Promise.all([
@@ -441,64 +610,87 @@ $("btnLoad").addEventListener("click", async () => {
     ]);
 
     setStatus("Lendo a tabela CNES selecionada (isso pode levar um tempinho, é um arquivo grande)...");
-    const cnesBuf = await readFileAsArrayBuffer(cnesFile);
-    const tbEstab = { name: cnesFile.name, rows: await parseAnyToRows(cnesBuf, cnesFile.name) };
+    const cnesBuf = await readFileAsArrayBuffer(largeFiles["tbEstabelecimento"]);
+    const tbEstab = { name: largeFiles["tbEstabelecimento"].name, rows: await parseAnyToRows(cnesBuf, largeFiles["tbEstabelecimento"].name) };
 
-    setStatus("Lendo decisões já gravadas...");
-    await appsScriptLoadDecisions();
-
-    setStatus("Cruzando CNES x CRM...");
+    setStatus("Montando o lado CNES...");
     const cnesTratada = buildCnesTratada(tbEstab.rows, {
       dpTipoUnidade: dpTipoUnidadeF.rows, dpMunicipio: dpMunicipioF.rows, dpMotivoDesativacao: dpMotivoF.rows
     });
-    const crmContas = buildCrmContas(crmFile.rows);
-    let candidates = matchCandidates(crmContas, cnesTratada);
+    cnesTratadaCache = cnesTratada; // guarda pra "Atualizar tabelas CRM" não precisar reler o arquivo grande
 
-    // remove o que já foi marcado Desconsiderar em execuções anteriores
-    candidates = candidates.filter(c => !existingDesconsideradas.has(`${c.id}__${c.CNES__c}`));
-
-    allRows = candidates;
-    rowDecisions = {};
-    renderTable();
-    setStatus(`Carregado: ${tbEstab.name} / ${crmFile.name} — ${candidates.length} candidatos.`);
+    await cruzarComCrm(crmFile.rows, tbEstab.name, crmFile.name);
   } catch(err){
     console.error(err);
     setStatus("Erro: " + err.message);
   } finally {
-    $("btnLoad").disabled = false;
+    $("btnLoadAll").disabled = false; $("btnLoadCrmOnly").disabled = false;
   }
 });
+
+$("btnLoadCrmOnly").addEventListener("click", async () => {
+  if (!cnesTratadaCache){
+    setStatus("Ainda não há dados do CNES carregados nesta sessão — clique em \"Atualizar tudo\" pelo menos uma vez primeiro.");
+    return;
+  }
+  $("btnLoadAll").disabled = true; $("btnLoadCrmOnly").disabled = true;
+  try{
+    setStatus("Lendo base do CRM (TODAS AS CONTAS ATIVAS CNES)...");
+    const crmFile = await appsScriptFetchFile("TODAS_AS_CONTAS_ATIVAS_CNES");
+    await cruzarComCrm(crmFile.rows, "tbEstabelecimento (em cache)", crmFile.name);
+  } catch(err){
+    console.error(err);
+    setStatus("Erro: " + err.message);
+  } finally {
+    $("btnLoadAll").disabled = false; $("btnLoadCrmOnly").disabled = false;
+  }
+});
+
+async function cruzarComCrm(crmRawRows, nomeCnes, nomeCrm){
+  setStatus("Lendo decisões já gravadas...");
+  await appsScriptLoadDecisions();
+
+  setStatus("Cruzando CNES x CRM...");
+  const crmContas = buildCrmContas(crmRawRows);
+  let candidates = matchCandidates(crmContas, cnesTratadaCache);
+  candidates = candidates.filter(c => !existingDesconsideradas.has(`${c.id}__${c.CNES__c}`));
+
+  allRows = candidates;
+  rowDecisions = {};
+  renderTable();
+  setStatus(`Carregado: ${nomeCnes} / ${nomeCrm} — ${candidates.length} candidatos.`);
+}
 
 /* =========================================================================
    Render / filtros / decisões
    ========================================================================= */
 const COLUMNS = [
+  { key: "AJUSTAR_CNES_CRM", label: "AJUSTAR CNES CRM", grp: "cnes" },
   { key: "CNES__c", label: "CNES", grp: "cnes" },
-  { key: "CNES.Nome Fantasia", label: "Nome Fantasia (CNES)", grp: "cnes" },
-  { key: "CNES.Razão social", label: "Razão social (CNES)", grp: "cnes" },
-  { key: "CNES.Perfil da Conta_Provável", label: "Perfil provável (CNES)", grp: "cnes" },
-  { key: "CNES.CPF", label: "CPF (CNES)", grp: "cnes" },
-  { key: "CNES.CNPJ", label: "CNPJ (CNES)", grp: "cnes" },
-  { key: "CNES.UF", label: "UF (CNES)", grp: "cnes" },
-  { key: "CNES.CIDADE", label: "Cidade (CNES)", grp: "cnes" },
-  { key: "CNES.Logradouro com número", label: "Endereço (CNES)", grp: "cnes" },
-  { key: "CNES.Complemento", label: "Complemento (CNES)", grp: "cnes" },
-  { key: "CNES.Bairro", label: "Bairro (CNES)", grp: "cnes" },
-  { key: "CNES.CEP", label: "CEP (CNES)", grp: "cnes" },
   { key: "id", label: "Conta_ID (CRM)", grp: "crm" },
+  { key: "CNES.Nome Fantasia", label: "Nome Fantasia (CNES)", grp: "cnes" },
   { key: "Name", label: "Name (CRM)", grp: "crm" },
+  { key: "CNES.Razão social", label: "Razão social (CNES)", grp: "cnes" },
   { key: "RazaoSocial__c", label: "RazaoSocial__c (CRM)", grp: "crm" },
+  { key: "CNES.Perfil da Conta_Provável", label: "Perfil provável (CNES)", grp: "cnes" },
   { key: "PERFIL_CONTA__c", label: "PERFIL_CONTA__c (CRM)", grp: "crm" },
+  { key: "CNES.CPF", label: "CPF (CNES)", grp: "cnes" },
   { key: "CPF__c", label: "CPF__c (CRM)", grp: "crm" },
+  { key: "CNES.CNPJ", label: "CNPJ (CNES)", grp: "cnes" },
   { key: "CNPJ__c", label: "CNPJ__c (CRM)", grp: "crm" },
+  { key: "CNES.UF", label: "UF (CNES)", grp: "cnes" },
   { key: "BillingState", label: "BillingState (CRM)", grp: "crm" },
+  { key: "CNES.CIDADE", label: "Cidade (CNES)", grp: "cnes" },
   { key: "BillingCity", label: "BillingCity (CRM)", grp: "crm" },
+  { key: "CNES.Logradouro com número", label: "Endereço (CNES)", grp: "cnes" },
   { key: "BillingStreet", label: "BillingStreet (CRM)", grp: "crm" },
   { key: "MV_Numero__c", label: "MV_Numero__c (CRM)", grp: "crm" },
+  { key: "CNES.Complemento", label: "Complemento (CNES)", grp: "cnes" },
   { key: "COMPLEMENTO__c", label: "COMPLEMENTO__c (CRM)", grp: "crm" },
+  { key: "CNES.Bairro", label: "Bairro (CNES)", grp: "cnes" },
   { key: "BAIRRO__c", label: "BAIRRO__c (CRM)", grp: "crm" },
-  { key: "BillingPostalCode", label: "BillingPostalCode (CRM)", grp: "crm" },
-  { key: "AJUSTAR_CNES_CRM", label: "AJUSTAR CNES CRM", grp: "cnes" }
+  { key: "CNES.CEP", label: "CEP (CNES)", grp: "cnes" },
+  { key: "BillingPostalCode", label: "BillingPostalCode (CRM)", grp: "crm" }
 ];
 
 function getFilteredRows(){
@@ -624,8 +816,7 @@ $("btnBulkDesconsiderar").addEventListener("click", async () => {
 /* =========================================================================
    Exportar (.xlsx) — só linhas marcadas "Incluir"
    ========================================================================= */
-const EXPORT_COLUMNS = ["CNES__c","id","CPF__c","CNPJ__c","BillingState","BillingCity","Name",
-  "RazaoSocial__c","PERFIL_CONTA__c","BillingStreet","MV_Numero__c","COMPLEMENTO__c","BAIRRO__c","BillingPostalCode"];
+const EXPORT_COLUMNS = ["CNES__c","id"];
 
 $("btnExport").addEventListener("click", () => {
   const rows = allRows.filter(r => rowDecisions[r.key] === "Incluir")
@@ -637,6 +828,692 @@ $("btnExport").addEventListener("click", () => {
   const stamp = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `LOCALIZAR_CNES_DE_CONTAS_CRM_incluir_${stamp}.xlsx`);
 });
+
+})();
+
 </script>
+
+<script>
+(function(){
+
+const $ = (id) => document.getElementById(id);
+function setStatus(msg){ $("a_statusLine").textContent = msg; }
+
+/* =========================================================================
+   Tabelas grandes — seleção manual (não passam pelo Apps Script: tamanho)
+   ========================================================================= */
+const LARGE_SOURCES = [
+  { chave: "tbEstabelecimento",      prefixo: "tbEstabelecimento" },
+  { chave: "rlEstabAtendPrestConv",  prefixo: "rlEstabAtendPrestConv" },
+  { chave: "rlEstabServClass",       prefixo: "rlEstabServClass" },
+  { chave: "rlEstabProgFundo",       prefixo: "rlEstabProgFundo" },
+  { chave: "rlEstabInstFisiAssist",  prefixo: "rlEstabInstFisiAssist" },
+  { chave: "rlEstabEquipeProf",      prefixo: "rlEstabEquipeProf" },
+  { chave: "rlEstabEquipamento",     prefixo: "rlEstabEquipamento" },
+  { chave: "rlEstabComplementar",    prefixo: "rlEstabComplementar" }
+];
+let largeFiles = {};
+
+function renderLargePanel(){
+  const box = $("a_largeFilesRows");
+  box.innerHTML = "";
+  LARGE_SOURCES.forEach(s => {
+    const row = document.createElement("div");
+    row.className = "large-row";
+    const name = document.createElement("span");
+    name.className = "large-row-name";
+    name.textContent = s.chave;
+    const status = document.createElement("span");
+    status.className = "large-row-status" + (largeFiles[s.chave] ? " ok" : "");
+    status.textContent = largeFiles[s.chave] ? `✓ ${largeFiles[s.chave].name}` : "— nenhum arquivo selecionado";
+    const label = document.createElement("label");
+    label.className = "btn-secondary-sm";
+    label.textContent = "Selecionar arquivo";
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = ".csv"; input.style.display = "none";
+    input.addEventListener("change", (ev) => {
+      const f = ev.target.files[0];
+      if (!f) return;
+      if (f.name.indexOf(s.prefixo) !== 0){
+        setStatus(`Aviso: o arquivo selecionado não começa com "${s.prefixo}" — confirme se é o certo.`);
+      }
+      largeFiles[s.chave] = f;
+      renderLargePanel();
+    });
+    label.appendChild(input);
+    row.appendChild(name); row.appendChild(status); row.appendChild(label);
+    box.appendChild(row);
+  });
+}
+renderLargePanel();
+
+$("a_btnToggleLargePanel").addEventListener("click", () => {
+  const panel = $("a_largeFilesPanel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+});
+
+function readFileAsText(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const decoder = new TextDecoder("windows-1252");
+      resolve(decoder.decode(reader.result));
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function loadLargeCsv(chave){
+  const file = largeFiles[chave];
+  if (!file) throw new Error(`Tabela "${chave}" não foi selecionada.`);
+  const text = await readFileAsText(file);
+  return Papa.parse(text, { header: true, delimiter: ";", skipEmptyLines: true }).data;
+}
+
+/* =========================================================================
+   Tabelas pequenas — via Apps Script (Web App), sem login
+   ========================================================================= */
+async function appsScriptFetchFile(chave){
+  const url = `${CONFIG.APPS_SCRIPT_URL}?action=file&chave=${encodeURIComponent(chave)}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Falha ao buscar "${chave}" no Apps Script: ${res.status}`);
+  const data = await res.json();
+  if (data.erro) throw new Error(`Apps Script retornou erro para "${chave}": ${data.erro}`);
+  const binaryStr = atob(data.base64);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+  const wb = XLSX.read(bytes.buffer, { type: "array" });
+  const sheetName = wb.SheetNames[0];
+  return XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: null });
+}
+
+const SMALL_KEYS = ["DPtbTipoUnidade","DPtbMunicipio","DPtbMotivoDesativacao","DPtbNaturezaJuridica",
+  "DPtbTipoEstabelecimento","tbAtividade","DPtbAtendimentoPrestado","DPtbServicoEspecializado","tbAtributo",
+  "tbGestao","DPtbInstalFisicaParaAssist","DPCBO","DPtbEquipamento","DPMediaEquip","TODAS_AS_CONTAS_ATIVAS_CNES"];
+
+/* =========================================================================
+   Utilitários de texto
+   ========================================================================= */
+function textProper(s){
+  if (s === null || s === undefined || s === "") return s;
+  return String(s).toLowerCase().replace(/(^|[\s\/])([a-zà-ú])/g, (m, sp, c) => sp + c.toUpperCase());
+}
+function caracteristicaLabel(ds){
+  let t = textProper(ds);
+  if (!t) return t;
+  t = t.split("Pro").join("Pró");
+  t = t.split(" E ").join(" e ");
+  return t;
+}
+function stripCboLetters(s){
+  if (s == null) return s;
+  return String(s).replace(/[ABCDEF]/g, "");
+}
+function keyOf(v){
+  if (v === null || v === undefined) return "";
+  const s = String(v).trim();
+  const n = Number(s);
+  return Number.isFinite(n) && s !== "" ? String(n) : s;
+}
+function mapBy(rows, field){
+  const m = new Map();
+  (rows || []).forEach(r => m.set(keyOf(r[field]), r));
+  return m;
+}
+
+/* =========================================================================
+   Base tbEstabelecimento (porte exato da consulta original)
+   ========================================================================= */
+const ATIVIDADE_ENSINO_MAP = {"1":"Unidade Universitária","2":"Unidade Escola Superior Isolada","3":"Unidade Auxiliar de Ensino","4":"Unidade sem Atividade de Ensino","5":"Hospital de Ensino"};
+const NIVEL_ATENCAO_MAP = {"1":"Atenção Básica","2":"Média Complexidade","3":"Internação","4":"Alta Complexidade","5":"Média Complexidade","6":"Alta Complexidade"};
+
+function buildTbEstabelecimentoBase(rawRows, lk, crmByCnes){
+  return rawRows.map(r => {
+    const pessoaFisicaJuridica = r.TP_PFPJ === "1" ? "Pessoa Física" : (r.TP_PFPJ === "3" ? "Pessoa Jurídica" : r.TP_PFPJ);
+    const tipoGestao = r.TP_GESTAO === "M" ? "Municipal" : r.TP_GESTAO === "E" ? "Estadual" : r.TP_GESTAO === "D" ? "Dupla" : "-";
+    const dependencia = r.NIVEL_DEP === "1" ? "Individual" : r.NIVEL_DEP === "3" ? "Mantida" : r.NIVEL_DEP;
+    const bairro = textProper(r.NO_BAIRRO);
+    const logradouro = textProper(r.NO_LOGRADOURO);
+    const nomeFantasia = textProper(r.NO_FANTASIA);
+    const razaoSocial = textProper(r.NO_RAZAO_SOCIAL);
+    const numero = r.NU_ENDERECO || "";
+    const endereco = `${logradouro || ""}, ${numero}`;
+    const logradouroComNumero = `${logradouro || ""} ${numero}`.split(",").join("");
+    const atividadeEnsino = ATIVIDADE_ENSINO_MAP[keyOf(r.CO_ATIVIDADE)] ?? null;
+
+    const tu = lk.tipoUnidade.get(keyOf(r.TP_UNIDADE)) || {};
+    const mu = lk.municipio.get(keyOf(r.CO_MUNICIPIO_GESTOR)) || {};
+    const nj = lk.naturezaJur.get(keyOf(r.CO_NATUREZA_JUR)) || {};
+    const te = lk.tipoEstab.get(keyOf(r.CO_TIPO_ESTABELECIMENTO)) || {};
+    const at = lk.atividade.get(keyOf(r.CO_ATIVIDADE_PRINCIPAL)) || {};
+    const mo = lk.motivoDesab.get(keyOf(r.CO_MOTIVO_DESAB)) || {};
+
+    let cnes = r.CO_CNES;
+    cnes = (cnes === null || cnes === undefined || cnes === "") ? "-" : String(cnes);
+    let cnpj = r.NU_CNPJ;
+    cnpj = (cnpj === null || cnpj === undefined || cnpj === "") ? "-" : String(cnpj);
+    const cpf = r.NU_CPF;
+
+    const funcionamentoUnidade = mo["Funcionamento Unidade"] ?? "Em Funcionamento";
+    const motivoDesativacao = mo["Motivo desativação 2"] ?? null;
+
+    let unimed = "Não";
+    if (nomeFantasia && nomeFantasia.startsWith("Unimed ")) unimed = "Sim";
+    else if (razaoSocial && (razaoSocial.startsWith("Unimed ") || razaoSocial.includes("Unimed "))) unimed = "Sim";
+
+    let perfil = tu["Perfil da Conta_Provável"] ?? null;
+    const nf = nomeFantasia || "";
+    if (nf.startsWith("Laboratorio") || nf.startsWith("Laboratório")) perfil = "Laboratório";
+    else if (nf.startsWith("Clínica") || nf.startsWith("Clinica")) perfil = "Clínica";
+    else if (nf.startsWith("Ambulatório") || nf.startsWith("Ambulatorio")) perfil = "Ambulatório";
+    else if (nf.startsWith("Consultorio") || nf.startsWith("Consultório")) perfil = "Consultório";
+    else if (nf.startsWith("Hospital")) perfil = "Hospital";
+    else if (nf.startsWith("Pronto Atendimento")) perfil = "Pronto Atendimento";
+
+    const crmMatch = crmByCnes.get(keyOf(cnes));
+
+    return {
+      CO_UNIDADE: r.CO_UNIDADE,
+      CNES: cnes,
+      "CNPJ Mantenedora": r.NU_CNPJ_MANTENEDORA,
+      "Pessoa Física/Jurídica": pessoaFisicaJuridica,
+      "Dependência": dependencia,
+      "Razão social": razaoSocial,
+      "Nome Fantasia": nomeFantasia,
+      "Logradouro": logradouro,
+      "Número": numero,
+      "Complemento": r.NO_COMPLEMENTO,
+      "Bairro": bairro,
+      "CEP": r.CO_CEP,
+      "Telefone": r.NU_TELEFONE,
+      "CPF": cpf,
+      "CNPJ": cnpj,
+      "última atualização CNES": r["TO_CHAR(DT_ATUALIZACAO,'DD/MM/YYYY')"],
+      "Site": r.NO_URL,
+      "Tipo de Gestão": tipoGestao,
+      "Cadastrado em": r["TO_CHAR(DT_ATUALIZACAO_ORIGEM,'DD/MM/YYYY')"],
+      "Endereço": endereco,
+      "Atividade de Ensino": atividadeEnsino,
+      "Perfil da Conta_Provável": perfil,
+      "Tipo de Estabelecimento": tu["Tipo de Estabelecimento"] ?? null,
+      "CO_SIGLA_ESTADO": mu.CO_SIGLA_ESTADO ?? null,
+      "CIDADE": mu.CIDADE ?? null,
+      "REGIONAL": mu.REGIONAL ?? null,
+      "Natureza Jurídica (Grupo)": nj["Natureza Jurídica (Grupo)"] ?? null,
+      "Tipo de entidade": nj["Tipo de entidade"] ?? null,
+      "CLASSIFICAÇÃO CRM": te["CLASSIFICAÇÃO CRM"] ?? null,
+      "Atividade Principal": at.DS_ATIVIDADE ?? null,
+      "Motivo desativação": motivoDesativacao,
+      "Funcionamento Unidade": funcionamentoUnidade,
+      "Conta_ID": crmMatch ? crmMatch.Conta_ID : null,
+      "Logradouro com número": logradouroComNumero,
+      "Unimed": unimed
+    };
+  });
+}
+
+/* =========================================================================
+   Agregações das 8 tabelas grandes de relacionamento (por CO_UNIDADE)
+   ========================================================================= */
+function buildAtendPrestConv(rows, lk){
+  const CATS_ATEND = ["Ambulatorial","Urgência","Regulação","Vigilância em Saúde","SADT","Outros","Internação"];
+  const CONV_MAP = {"1":"SUS","2":"Particular","3":"Plano / Seguro Próprio","4":"Plano / Seguro Terceiro","5":"Plano de Saúde Público","6":"Plano de Saúde Privado","7":"Gratuidade"};
+  const CATS_CONV = ["SUS","Particular","Plano / Seguro Próprio","Plano / Seguro Terceiro","Plano de Saúde Público","Plano de Saúde Privado","Gratuidade"];
+
+  const byUnidadeAtend = new Map(); // CO_UNIDADE -> Set(label)
+  const byUnidadeConv = new Map();
+  rows.forEach(r => {
+    const cu = r.CO_UNIDADE;
+    const atendLabel = (lk.atendPrestado.get(keyOf(r.CO_ATENDIMENTO_PRESTADO)) || {}).DS_ATENDIMENTO_PRESTADO;
+    if (atendLabel){
+      if (!byUnidadeAtend.has(cu)) byUnidadeAtend.set(cu, new Set());
+      byUnidadeAtend.get(cu).add(atendLabel);
+    }
+    const convLabel = CONV_MAP[keyOf(r.CO_CONVENIO)];
+    if (convLabel){
+      if (!byUnidadeConv.has(cu)) byUnidadeConv.set(cu, new Set());
+      byUnidadeConv.get(cu).add(convLabel);
+    }
+  });
+  const atend = new Map(), conv = new Map();
+  byUnidadeAtend.forEach((set, cu) => atend.set(cu, CATS_ATEND.filter(c => set.has(c)).join("; ")));
+  byUnidadeConv.forEach((set, cu) => conv.set(cu, CATS_CONV.filter(c => set.has(c)).join("; ")));
+  return { atend, conv };
+}
+
+function servicoCaracteristica(rows, lk, servicoFiltro, colName){
+  const byUnidade = new Map(); // CO_UNIDADE -> Set(Característica)
+  rows.forEach(r => {
+    const serv = (lk.servEspecializado.get(keyOf(r.CO_SERVICO)) || {}).Serviço;
+    if (serv !== servicoFiltro) return;
+    const carac = lk.atributo.get(keyOf(r.TP_CARACTERISTICA));
+    if (!carac) return;
+    const cu = r.CO_UNIDADE;
+    if (!byUnidade.has(cu)) byUnidade.set(cu, new Set());
+    byUnidade.get(cu).add(carac);
+  });
+  const out = new Map();
+  byUnidade.forEach((set, cu) => {
+    const proprio = set.has("Próprio"), terceirizado = set.has("Terceirizado"), ambos = set.has("Próprio e Terceirizado");
+    let val = "";
+    if (ambos || (proprio && terceirizado)) val = "Próprio e Terceirizado";
+    else if (proprio) val = "Próprio";
+    else if (terceirizado) val = "Terceirizado";
+    out.set(cu, val);
+  });
+  return out;
+}
+
+function buildProgFundo(rows){
+  const CATS_ATIV = ["Ambulatorial","Hospitalar"];
+  const CATS_NIVEL = ["Média Complexidade","Atenção Básica","Alta Complexidade","Internação"];
+  const byUnidadeAtiv = new Map(), byUnidadeNivel = new Map();
+  rows.forEach(r => {
+    const cu = r.CO_UNIDADE;
+    const co = keyOf(r.CO_ATIVIDADE);
+    const ativLabel = co === "1" ? "Ambulatorial" : co === "2" ? "Hospitalar" : null;
+    if (ativLabel){
+      if (!byUnidadeAtiv.has(cu)) byUnidadeAtiv.set(cu, new Set());
+      byUnidadeAtiv.get(cu).add(ativLabel);
+    }
+    const nivelLabel = NIVEL_ATENCAO_MAP[co];
+    if (nivelLabel){
+      if (!byUnidadeNivel.has(cu)) byUnidadeNivel.set(cu, new Set());
+      byUnidadeNivel.get(cu).add(nivelLabel);
+    }
+  });
+  const ativ = new Map(), nivel = new Map();
+  byUnidadeAtiv.forEach((set, cu) => ativ.set(cu, CATS_ATIV.filter(c => set.has(c)).join("; ")));
+  byUnidadeNivel.forEach((set, cu) => nivel.set(cu, CATS_NIVEL.filter(c => set.has(c)).join("; ")));
+  return { ativ, nivel };
+}
+
+function buildInstalacoes(rows, lk){
+  const acc = new Map(); // CO_UNIDADE -> {Ambulatórios(max),Centro cirúrgico(max),Centro de medicação(max),Sala de classificação de risco(max), Consultórios Médicos(sum), Clínicas Básicas(sum), Clínicas Especializadas(sum), Clínicas Indiferenciado(sum), Outras Clínicas e Consultórios(sum)}
+  const MAX_FIELDS = ["Ambulatórios","Centro cirúrgico","Centro de medicação","Sala de classificação de risco"];
+  const SUM_CATEGORIES = ["Consultórios Médicos","Clínicas Básicas","Clínicas Especializadas","Clínicas Indiferenciado","Outras Clínicas e Consultórios"];
+  rows.forEach(r => {
+    const cu = r.CO_UNIDADE;
+    const info = lk.instalFisica.get(keyOf(r.CO_INSTALACAO));
+    if (!info) return;
+    let qt = r.QT_INSTALACAO;
+    qt = (qt === null || qt === undefined || qt < 0) ? 0 : Number(qt);
+    if (!acc.has(cu)) acc.set(cu, { "Ambulatórios":0, "Centro cirúrgico":0, "Centro de medicação":0, "Sala de classificação de risco":0, "Consultórios Médicos":0, "Clínicas Básicas":0, "Clínicas Especializadas":0, "Clínicas Indiferenciado":0, "Outras Clínicas e Consultórios":0 });
+    const bucket = acc.get(cu);
+    MAX_FIELDS.forEach(f => { const v = Number(info[f] ?? 1); if (v > bucket[f]) bucket[f] = v; });
+    const categoria = info["CRM_Instalaçoes Físicas para Assistência - Ambulatorial"];
+    if (SUM_CATEGORIES.includes(categoria)) bucket[categoria] += qt;
+  });
+  return acc;
+}
+
+function buildProfissionais(rows, lk){
+  // conta CO_UNIDADE x CO_CBO (letras removidas), depois classifica por DPCBO
+  const contagem = new Map(); // CO_UNIDADE -> {Outros,Médicos,Dentistas}
+  rows.forEach(r => {
+    const cu = r.CO_UNIDADE;
+    const cbo = stripCboLetters(r.CO_CBO);
+    const tipo = lk.cbo.get(keyOf(cbo)) || "Outros";
+    if (!contagem.has(cu)) contagem.set(cu, { "Outros Profissionais":0, "Profissionais Médicos":0, "Profissionais Dentistas":0 });
+    const b = contagem.get(cu);
+    if (tipo === "Médico") b["Profissionais Médicos"]++;
+    else if (tipo === "Dentista") b["Profissionais Dentistas"]++;
+    else b["Outros Profissionais"]++;
+  });
+  const out = new Map();
+  contagem.forEach((b, cu) => out.set(cu, { ...b, "Total Profissionais": b["Outros Profissionais"] + b["Profissionais Médicos"] + b["Profissionais Dentistas"] }));
+  return out;
+}
+
+function buildExamesEquipamento(rows, lk){
+  const byUnidade = new Map();
+  rows.forEach(r => {
+    const eq = lk.equipamento.get(keyOf(r.CO_EQUIPAMENTO));
+    if (!eq) return;
+    const tipo = eq["TIPO EQUIPAMENTO CRM"];
+    if (!tipo) return;
+    const media = Number(lk.mediaEquip.get(tipo) ?? 0);
+    const qtUso = Number(r.QT_USO ?? 0);
+    const qtdExames = qtUso * media;
+    if (qtdExames <= 0) return;
+    const cu = r.CO_UNIDADE;
+    byUnidade.set(cu, (byUnidade.get(cu) || 0) + qtdExames);
+  });
+  return byUnidade;
+}
+
+function buildLeitos(rows){
+  const byUnidade = new Map(); // CO_UNIDADE -> {Total, SUS}
+  rows.forEach(r => {
+    const cu = r.CO_UNIDADE;
+    if (!byUnidade.has(cu)) byUnidade.set(cu, { total: 0, sus: 0 });
+    const b = byUnidade.get(cu);
+    b.total += Number(r.QT_EXIST ?? 0);
+    b.sus += Number(r.QT_SUS ?? 0);
+  });
+  return byUnidade;
+}
+
+/* =========================================================================
+   Fluxo principal — Atualizar
+   ========================================================================= */
+let allRows = [];
+let columnSource = {}; // nome CRM da coluna -> "FINAL" | "CNES" | "CRM"
+let cnesRowsCache = null; // tbEstabelecimento Cimpleta já montada (para "Atualizar tabelas CRM")
+
+$("a_btnLoadAll").addEventListener("click", async () => {
+  const faltando = LARGE_SOURCES.filter(s => !largeFiles[s.chave]);
+  if (faltando.length){
+    setStatus("Faltam tabelas grandes: " + faltando.map(s => s.chave).join(", "));
+    return;
+  }
+  setBotoesDesabilitados(true);
+  try{
+    setStatus("Lendo tabelas pequenas (Apps Script)...");
+    const smallResults = {};
+    await Promise.all(SMALL_KEYS.map(async k => { smallResults[k] = await appsScriptFetchFile(k); }));
+
+    const lk = {
+      tipoUnidade: mapBy(smallResults.DPtbTipoUnidade, "CO_TIPO_UNIDADE"),
+      municipio: mapBy(smallResults.DPtbMunicipio, "CO_MUNICIPIO"),
+      motivoDesab: mapBy(smallResults.DPtbMotivoDesativacao, "CD_MOTIVO_DESAB"),
+      naturezaJur: mapBy(smallResults.DPtbNaturezaJuridica, "CO_NATUREZA_JUR"),
+      tipoEstab: mapBy(smallResults.DPtbTipoEstabelecimento, "CO_TIPO_ESTABELECIMENTO"),
+      atividade: mapBy(smallResults.tbAtividade, "CO_ATIVIDADE"),
+      atendPrestado: mapBy(smallResults.DPtbAtendimentoPrestado, "CO_ATENDIMENTO_PRESTADO"),
+      servEspecializado: mapBy(smallResults.DPtbServicoEspecializado, "CO_SERVICO_ESPECIALIZADO"),
+      atributo: new Map(
+        (smallResults.tbAtributo || [])
+          .filter(r => String(r.CO_INDICADOR) === "4")
+          .map(r => [keyOf(r.CO_ATRIBUTO), caracteristicaLabel(r.DS_ATRIBUTO)])
+      ),
+      instalFisica: mapBy(smallResults.DPtbInstalFisicaParaAssist, "CO_INSTALACAO"),
+      cbo: new Map((smallResults.DPCBO || []).map(r => [keyOf(stripCboLetters(r["CBO 2002"])), r["TIPO PROFISSIONAL"]])),
+      equipamento: mapBy(smallResults.DPtbEquipamento, "CO_EQUIPAMENTO"),
+      mediaEquip: new Map((smallResults.DPMediaEquip || []).map(r => [r.equipamento, r["média exames por equipamento"]]))
+    };
+
+    const crmRowsIniciais = buildCrmContas(smallResults.TODAS_AS_CONTAS_ATIVAS_CNES);
+    const crmByCnes = new Map(crmRowsIniciais.filter(c => c.CNES && c.CNES !== "0").map(c => [keyOf(c.CNES), c]));
+
+    setStatus("Lendo tbEstabelecimento (arquivo grande)...");
+    const tbEstabRaw = await loadLargeCsv("tbEstabelecimento");
+    let cnesRows = buildTbEstabelecimentoBase(tbEstabRaw, lk, crmByCnes);
+
+    setStatus("Lendo e cruzando Atendimento/Convênio...");
+    const atendConv = buildAtendPrestConv(await loadLargeCsv("rlEstabAtendPrestConv"), lk);
+
+    setStatus("Lendo e cruzando Serviços (Anatomia/Imagem/Laboratório/Domiciliar)...");
+    const servRows = await loadLargeCsv("rlEstabServClass");
+    const servAnatomia = servicoCaracteristica(servRows, lk, "Anatomia Patológica");
+    const servImagem = servicoCaracteristica(servRows, lk, "Imagem");
+    const servLaboratorio = servicoCaracteristica(servRows, lk, "Laboratório");
+    const servDomiciliar = servicoCaracteristica(servRows, lk, "Atenção domiciliar");
+
+    setStatus("Lendo e cruzando Atividade/Nível de Atenção...");
+    const progFundo = buildProgFundo(await loadLargeCsv("rlEstabProgFundo"));
+
+    setStatus("Lendo e cruzando Instalações...");
+    const instalacoes = buildInstalacoes(await loadLargeCsv("rlEstabInstFisiAssist"), lk);
+
+    setStatus("Lendo e cruzando Equipe Profissional...");
+    const profissionais = buildProfissionais(await loadLargeCsv("rlEstabEquipeProf"), lk);
+
+    setStatus("Lendo e cruzando Equipamentos (exames/mês)...");
+    const exames = buildExamesEquipamento(await loadLargeCsv("rlEstabEquipamento"), lk);
+
+    setStatus("Lendo e cruzando Leitos...");
+    const leitos = buildLeitos(await loadLargeCsv("rlEstabComplementar"));
+
+    setStatus("Montando tbEstabelecimento Cimpleta...");
+    cnesRows.forEach(r => {
+      const cu = r.CO_UNIDADE;
+      r["Atendimento Prestado"] = atendConv.atend.get(cu) || null;
+      r["Convênios"] = atendConv.conv.get(cu) || null;
+      r["Serviço Anatomia Patológica"] = servAnatomia.get(cu) || null;
+      r["Serviço Imagem"] = servImagem.get(cu) || null;
+      r["Serviço Laboratório"] = servLaboratorio.get(cu) || null;
+      r["Atenção Domicilar"] = servDomiciliar.get(cu) || null;
+      r["Atividade"] = progFundo.ativ.get(cu) || null;
+      r["Nível de Atenção"] = progFundo.nivel.get(cu) || null;
+      const inst = instalacoes.get(cu);
+      r["Ambulatórios"] = inst ? inst["Ambulatórios"] : null;
+      r["Centro cirúrgico"] = inst ? inst["Centro cirúrgico"] : null;
+      r["Centro de medicação"] = inst ? inst["Centro de medicação"] : null;
+      r["Sala de classificação de risco"] = inst ? inst["Sala de classificação de risco"] : null;
+      r["Consultórios Médicos"] = inst ? inst["Consultórios Médicos"] : null;
+      r["Clínicas Básicas"] = inst ? inst["Clínicas Básicas"] : null;
+      r["Clínicas Especializadas"] = inst ? inst["Clínicas Especializadas"] : null;
+      r["Clínicas Indiferenciado"] = inst ? inst["Clínicas Indiferenciado"] : null;
+      r["Outras Clínicas e Consultórios"] = inst ? inst["Outras Clínicas e Consultórios"] : null;
+      const prof = profissionais.get(cu);
+      r["Outros Profissionais"] = prof ? prof["Outros Profissionais"] : null;
+      r["Profissionais Médicos"] = prof ? prof["Profissionais Médicos"] : null;
+      r["Profissionais Dentistas"] = prof ? prof["Profissionais Dentistas"] : null;
+      r["Total Profissionais"] = prof ? prof["Total Profissionais"] : null;
+      r["Qtd Exames Equipamentos/mês"] = exames.get(cu) ?? null;
+      const lt = leitos.get(cu);
+      r["Leitos Total"] = lt ? lt.total : null;
+      r["Leitos SUS"] = lt ? lt.sus : null;
+    });
+
+    cnesRowsCache = cnesRows; // guarda pra "Atualizar tabelas CRM" não precisar reler os arquivos grandes
+
+    await cruzarComCrm(crmRowsIniciais);
+  } catch(err){
+    console.error(err);
+    setStatus("Erro: " + err.message);
+  } finally {
+    setBotoesDesabilitados(false);
+  }
+});
+
+$("a_btnLoadCrmOnly").addEventListener("click", async () => {
+  if (!cnesRowsCache){
+    setStatus("Ainda não há dados do CNES carregados nesta sessão — clique em \"Atualizar tudo\" pelo menos uma vez primeiro.");
+    return;
+  }
+  setBotoesDesabilitados(true);
+  try{
+    setStatus("Lendo base do CRM (TODAS AS CONTAS ATIVAS CNES)...");
+    const crmRowsFrescas = buildCrmContas(await appsScriptFetchFile("TODAS_AS_CONTAS_ATIVAS_CNES"));
+    await cruzarComCrm(crmRowsFrescas);
+  } catch(err){
+    console.error(err);
+    setStatus("Erro: " + err.message);
+  } finally {
+    setBotoesDesabilitados(false);
+  }
+});
+
+function setBotoesDesabilitados(v){
+  $("a_btnLoadAll").disabled = v; $("a_btnLoadCrmOnly").disabled = v;
+}
+
+async function cruzarComCrm(crmRows){
+  setStatus("Cruzando com o CRM e calculando FINAL...");
+  allRows = buildAtualizarDadosCnes(crmRows, cnesRowsCache);
+  initColumnSources();
+  renderTable();
+  setStatus(`Pronto — ${allRows.length} contas cruzadas. (Nota: o Conta_ID do lado CNES fica com o valor de quando "Atualizar tudo" rodou por último; o CRM__Conta_ID sempre vem fresco.)`);
+}
+
+/* =========================================================================
+   CRM (TODAS AS CONTAS ATIVAS CNES) — usado cru
+   ========================================================================= */
+function buildCrmContas(rawRows){
+  return (rawRows || []).map(r => ({ ...r, CNES: r.CNES != null ? String(r.CNES).trim() : "" }));
+}
+
+/* =========================================================================
+   Comparação final — 41 pares + regras especiais (porte exato do roteiro)
+   ========================================================================= */
+const PAIRS = [
+  ["Conta_ID","Conta_ID"], ["CPF","CPF"], ["CNPJ","CNPJ"], ["Cidade","CIDADE"], ["Empresa","Nome Fantasia"],
+  ["Razão Social","Razão social"], ["Tipo de Entidade","Tipo de entidade"], ["Logradouro","Logradouro"],
+  ["Complemento","Complemento"], ["Bairro","Bairro"], ["CEP","CEP"], ["Telefone Principal","Telefone"],
+  ["Última atualização CNES","última atualização CNES"], ["Motivo desativação CNES","Motivo desativação"],
+  ["Natureza Jurídica","Natureza Jurídica (Grupo)"], ["Gestão","Tipo de Gestão"], ["Atividade","Atividade"],
+  ["Tipo de Atendimento Prestado","Atendimento Prestado"], ["Tipo de Estabelecimento","Tipo de Estabelecimento"],
+  ["Atividade Ensino / Pesquisa","Atividade de Ensino"], ["Leitos Total","Leitos Total"], ["Leitos Total SUS","Leitos SUS"],
+  ["Profissionais Médicos","Profissionais Médicos"], ["Total Profissionais","Total Profissionais"],
+  ["Nível de Atenção","Nível de Atenção"], ["Convênios","Convênios"], ["Qtd. Consultórios","Consultórios Médicos"],
+  ["Qtd. Clínicas Básicas","Clínicas Básicas"], ["Qtd. Clínicas Especializadas","Clínicas Especializadas"],
+  ["Qtd. Clínicas Indiferenciado","Clínicas Indiferenciado"], ["Qtd. Outras Clínicas","Outras Clínicas e Consultórios"],
+  ["Qtd. Exames imagem/mês","Qtd Exames Equipamentos/mês"], ["Sala de Classificação de Risco","Sala de classificação de risco"],
+  ["Ambulatório","Ambulatórios"], ["Centro Cirúrgico","Centro cirúrgico"], ["Centro de Medicação","Centro de medicação"],
+  ["Serviço de Diagnóstico por Imagem","Serviço Imagem"], ["Serviço de Diag. Anatomia Patológica","Serviço Anatomia Patológica"],
+  ["Laboratório Clínico","Serviço Laboratório"], ["UF/Província","CO_SIGLA_ESTADO"], ["Classificação do Estabelecimento","CLASSIFICAÇÃO CRM"]
+];
+
+const SPECIAL_COLUMNS = ["Funcionamento da Unidade","Perfil da Conta","Situação registro CNES","País","Data desativação CNES","Número"];
+
+function buildAtualizarDadosCnes(crmRows, cnesRows){
+  const cnesByCnes = new Map(cnesRows.filter(c => c.CNES && c.CNES !== "0" && c.CNES !== "-").map(c => [keyOf(c.CNES), c]));
+  const out = [];
+  crmRows.forEach(crm => {
+    if (!crm.CNES || crm.CNES === "0") return;
+    const cnes = cnesByCnes.get(keyOf(crm.CNES));
+    if (!cnes) return;
+
+    const row = { CRM_raw: crm, CNES_raw: cnes };
+    PAIRS.forEach(([crmCol, cnesCol]) => {
+      row[`CRM__${crmCol}`] = crm[crmCol];
+      row[`CNES__${crmCol}`] = cnes[cnesCol];
+      const cnesVal = cnes[cnesCol];
+      row[`FINAL__${crmCol}`] = (cnesVal !== null && cnesVal !== undefined && cnesVal !== "") ? cnesVal : crm[crmCol];
+    });
+
+    // regras especiais
+    const motivoVazio = !cnes["Motivo desativação"];
+    row["CRM__Funcionamento da Unidade"] = crm["Funcionamento da Unidade"];
+    row["FINAL__Funcionamento da Unidade"] = motivoVazio ? crm["Funcionamento da Unidade"] : "Desativado";
+
+    row["CRM__Perfil da Conta"] = crm["Perfil da Conta"];
+    row["CNES__Perfil da Conta"] = cnes["Perfil da Conta_Provável"];
+    row["FINAL__Perfil da Conta"] = (cnes["Perfil da Conta_Provável"] === crm["Perfil da Conta"]) ? crm["Perfil da Conta"] : "AVALIAR";
+
+    row["FINAL__Situação registro CNES"] = motivoVazio ? "Ativo" : "Inativo";
+
+    row["CRM__País"] = crm["País"];
+    row["FINAL__País"] = (crm["País"] !== "Brasil") ? "Brasil" : crm["País"];
+
+    row["CRM__Data desativação CNES"] = crm["Data desativação CNES"];
+    row["FINAL__Data desativação CNES"] = (!motivoVazio) ? cnes["última atualização CNES"] : crm["Data desativação CNES"];
+
+    row["FINAL__Número"] = cnes["Número"];
+
+    row["CRM__Subtipo da Conta"] = crm["Subtipo da Conta"];
+    row["CRM__Subtipo do Estabelecimento"] = crm["Subtipo do Estabelecimento"];
+
+    // limpeza CPF/CNPJ/telefone aplicada em cima do FINAL escolhido, feita na hora da exportação
+    out.push(row);
+  });
+  return out;
+}
+
+function alnumOnly(v){ return v == null ? v : String(v).replace(/[^a-zA-Z0-9]/g, ""); }
+function telefoneLimpo(v){
+  if (v == null) return v;
+  const digitos = String(v).replace(/\D/g, "");
+  return digitos.startsWith("55") ? digitos : "55" + digitos;
+}
+
+/* =========================================================================
+   Seletor de fonte por coluna (FINAL / CNES / CRM)
+   ========================================================================= */
+function initColumnSources(){
+  columnSource = {};
+  PAIRS.forEach(([crmCol]) => columnSource[crmCol] = "FINAL");
+  SPECIAL_COLUMNS.forEach(c => columnSource[c] = "FINAL");
+}
+
+function valueFor(row, col){
+  const src = columnSource[col] || "FINAL";
+  return row[`${src}__${col}`];
+}
+
+/* =========================================================================
+   Render
+   ========================================================================= */
+const ALL_COLS = [...PAIRS.map(p => p[0]), ...SPECIAL_COLUMNS];
+
+function renderTable(){
+  $("a_emptyState").style.display = allRows.length ? "none" : "block";
+  $("a_mainTable").style.display = allRows.length ? "table" : "none";
+  $("a_summary").style.display = allRows.length ? "flex" : "none";
+  $("a_sumTotal").textContent = allRows.length;
+  $("a_btnExport").disabled = allRows.length === 0;
+
+  const thead = document.querySelector("#a_mainTable thead");
+  const tbody = document.querySelector("#a_mainTable tbody");
+  thead.innerHTML = "";
+  tbody.innerHTML = "";
+
+  const trh = document.createElement("tr");
+  ALL_COLS.forEach(col => {
+    const th = document.createElement("th");
+    th.className = "grp-final";
+    const title = document.createElement("span");
+    title.className = "col-title";
+    title.textContent = col;
+    th.appendChild(title);
+    const sel = document.createElement("select");
+    ["FINAL","CNES","CRM"].forEach(opt => {
+      const o = document.createElement("option");
+      o.value = opt; o.textContent = opt;
+      if (columnSource[col] === opt) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener("change", () => { columnSource[col] = sel.value; renderTable(); });
+    th.appendChild(sel);
+    trh.appendChild(th);
+  });
+  thead.appendChild(trh);
+
+  const frag = document.createDocumentFragment();
+  allRows.slice(0, 500).forEach(row => {
+    const tr = document.createElement("tr");
+    ALL_COLS.forEach(col => {
+      const td = document.createElement("td");
+      td.className = columnSource[col] === "CNES" ? "grp-cnes" : columnSource[col] === "CRM" ? "grp-crm" : "grp-final";
+      const v = valueFor(row, col);
+      td.textContent = v === null || v === undefined ? "" : v;
+      tr.appendChild(td);
+    });
+    frag.appendChild(tr);
+  });
+  tbody.appendChild(frag);
+  if (allRows.length > 500){
+    setStatus(`Pronto — ${allRows.length} contas (mostrando as primeiras 500 na tela; a exportação sai completa).`);
+  }
+}
+
+/* =========================================================================
+   Exportar
+   ========================================================================= */
+$("a_btnExport").addEventListener("click", () => {
+  const rows = allRows.map(row => {
+    const o = {};
+    ALL_COLS.forEach(col => {
+      let v = valueFor(row, col);
+      if (col === "CPF" || col === "CNPJ") v = alnumOnly(v);
+      if (col === "Telefone Principal") v = telefoneLimpo(v);
+      o[col] = v;
+    });
+    return o;
+  });
+  const ws = XLSX.utils.json_to_sheet(rows, { header: ALL_COLS });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Atualizar Contas CRM");
+  const stamp = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `ATUALIZAR_CONTAS_CRM_${stamp}.xlsx`);
+});
+
+})();
+
+</script>
+
 </body>
 </html>
