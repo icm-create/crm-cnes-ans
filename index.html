@@ -383,6 +383,24 @@
       <tbody id="c_itensBody"></tbody>
     </table>
   </div>
+
+  <h3>Tabelas de/para (regras fixas do CNES)</h3>
+  <div class="cfg-note" style="margin-bottom:8px">
+    "Carregar da fonte atual" busca a tabela de verdade no Drive (via Apps Script) uma vez, só pra você revisar e salvar aqui — depois de salva, o app passa a usar esse dado configurado e não busca mais no Drive pra essa tabela, até você mandar carregar de novo.
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+    <select id="c_deparaSelect"></select>
+    <button id="c_btnCarregarDePara" class="btn-secondary">Carregar da fonte atual (Drive)</button>
+    <button id="c_btnAddLinhaDePara" class="btn-secondary">+ Adicionar linha</button>
+    <button id="c_btnSalvarDePara" class="btn-primary">Salvar esta tabela</button>
+    <span id="c_statusDePara" style="font-size:12px;color:#888"></span>
+  </div>
+  <div class="table-wrap" style="max-height:40vh">
+    <table>
+      <thead><tr><th style="padding:6px 8px;text-align:left;width:160px">Chave (código)</th><th style="padding:6px 8px;text-align:left">Valores (JSON)</th><th></th></tr></thead>
+      <tbody id="c_deparaBody"></tbody>
+    </table>
+  </div>
 </div>
 
 </div>
@@ -524,9 +542,39 @@ function picklistOuPadrao(nome, padrao){
   return (lista && lista.length) ? lista : padrao;
 }
 
+/* De/para: nomes das tabelas cuja coluna-chave já conhecemos (usadas de
+   verdade no cálculo). Usado tanto pra buscar no Drive quanto pra montar a
+   tela de configuração. */
+const DEPARA_KEY_FIELDS = {
+  DPtbTipoUnidade: "CO_TIPO_UNIDADE",
+  DPtbMunicipio: "CO_MUNICIPIO",
+  DPtbMotivoDesativacao: "CD_MOTIVO_DESAB",
+  DPtbNaturezaJuridica: "CO_NATUREZA_JUR",
+  DPtbTipoEstabelecimento: "CO_TIPO_ESTABELECIMENTO",
+  tbAtividade: "CO_ATIVIDADE",
+  DPtbAtendimentoPrestado: "CO_ATENDIMENTO_PRESTADO",
+  DPtbServicoEspecializado: "CO_SERVICO_ESPECIALIZADO",
+  tbAtributo: "CO_ATRIBUTO",
+  DPtbInstalFisicaParaAssist: "CO_INSTALACAO",
+  DPCBO: "CBO 2002",
+  DPtbEquipamento: "CO_EQUIPAMENTO",
+  DPMediaEquip: "equipamento",
+  DPtbGestaotbAtributo: "CO_GESTAO"
+};
+
+/* Devolve as linhas a usar pra montar um lookup: as configuradas (se já
+   existirem) ou as recém-buscadas do Drive (reserva, nunca quebra). */
+function linhasDeParaOuFonte(nomeTabela, linhasBuscadas){
+  const cfg = window.__config.deparas && window.__config.deparas[nomeTabela];
+  if (cfg && Object.keys(cfg).length){
+    return Object.values(cfg);
+  }
+  return linhasBuscadas || [];
+}
+
 const SMALL_KEYS = ["DPtbTipoUnidade","DPtbMunicipio","DPtbMotivoDesativacao","DPtbNaturezaJuridica",
   "DPtbTipoEstabelecimento","tbAtividade","DPtbAtendimentoPrestado","DPtbServicoEspecializado","tbAtributo",
-  "tbGestao","DPtbInstalFisicaParaAssist","DPCBO","DPtbEquipamento","DPMediaEquip","TODAS_AS_CONTAS_ATIVAS_CNES"];
+  "DPtbGestaotbAtributo","DPtbInstalFisicaParaAssist","DPCBO","DPtbEquipamento","DPMediaEquip","TODAS_AS_CONTAS_ATIVAS_CNES"];
 
 /* =========================================================================
    Utilitários de texto
@@ -562,7 +610,7 @@ function mapBy(rows, field){
    Base tbEstabelecimento (porte exato da consulta original)
    ========================================================================= */
 const ATIVIDADE_ENSINO_MAP = {"1":"Unidade Universitária","2":"Unidade Escola Superior Isolada","3":"Unidade Auxiliar de Ensino","4":"Unidade sem Atividade de Ensino","5":"Hospital de Ensino"};
-const NIVEL_ATENCAO_MAP = {"1":"Atenção Básica","2":"Média Complexidade","3":"Internação","4":"Alta Complexidade","5":"Média Complexidade","6":"Alta Complexidade"};
+// (Nível de Atenção / Atendimento vêm de DPtbGestaotbAtributo — ver lk.gestaoAtributo)
 
 function buildTbEstabelecimentoBase(rawRows, lk, crmByCnes){
   return rawRows.map(r => {
@@ -701,20 +749,21 @@ function servicoCaracteristica(rows, lk, servicoFiltro, colName){
   return out;
 }
 
-function buildProgFundo(rows){
+function buildProgFundo(rows, lk){
   const CATS_ATIV = ["Ambulatorial","Hospitalar"];
-  const CATS_NIVEL = ["Média Complexidade","Atenção Básica","Alta Complexidade","Internação"];
+  const CATS_NIVEL = ["Atenção Básica","Média Complexidade","Alta Complexidade","Internação"];
   const byUnidadeAtiv = new Map(), byUnidadeNivel = new Map();
   rows.forEach(r => {
     const cu = r.CO_UNIDADE;
-    const co = keyOf(r.CO_ATIVIDADE);
-    const ativLabel = co === "1" ? "Ambulatorial" : co === "2" ? "Hospitalar" : null;
-    if (ativLabel){
+    const info = lk.gestaoAtributo.get(keyOf(r.CO_ATIVIDADE));
+    if (!info) return;
+    const ativLabel = info["Atendimento"];
+    if (ativLabel && ativLabel !== "-"){
       if (!byUnidadeAtiv.has(cu)) byUnidadeAtiv.set(cu, new Set());
       byUnidadeAtiv.get(cu).add(ativLabel);
     }
-    const nivelLabel = NIVEL_ATENCAO_MAP[co];
-    if (nivelLabel){
+    const nivelLabel = info["Nível de Atenção"];
+    if (nivelLabel && nivelLabel !== "-"){
       if (!byUnidadeNivel.has(cu)) byUnidadeNivel.set(cu, new Set());
       byUnidadeNivel.get(cu).add(nivelLabel);
     }
@@ -819,27 +868,33 @@ $("btnLoadAll").addEventListener("click", async () => {
   setBotoesGlobaisDesabilitados(true);
   try{
     setStatus("Lendo tabelas pequenas (Apps Script)...");
+    const chavesParaBuscar = SMALL_KEYS.filter(k => {
+      if (k === "TODAS_AS_CONTAS_ATIVAS_CNES") return true;
+      const cfg = window.__config.deparas && window.__config.deparas[k];
+      return !(cfg && Object.keys(cfg).length); // já configurado -> não precisa buscar no Drive
+    });
     const smallResults = {};
-    await Promise.all(SMALL_KEYS.map(async k => { smallResults[k] = await appsScriptFetchFile(k); }));
+    await Promise.all(chavesParaBuscar.map(async k => { smallResults[k] = await appsScriptFetchFile(k); }));
 
     const lk = {
-      tipoUnidade: mapBy(smallResults.DPtbTipoUnidade, "CO_TIPO_UNIDADE"),
-      municipio: mapBy(smallResults.DPtbMunicipio, "CO_MUNICIPIO"),
-      motivoDesab: mapBy(smallResults.DPtbMotivoDesativacao, "CD_MOTIVO_DESAB"),
-      naturezaJur: mapBy(smallResults.DPtbNaturezaJuridica, "CO_NATUREZA_JUR"),
-      tipoEstab: mapBy(smallResults.DPtbTipoEstabelecimento, "CO_TIPO_ESTABELECIMENTO"),
-      atividade: mapBy(smallResults.tbAtividade, "CO_ATIVIDADE"),
-      atendPrestado: mapBy(smallResults.DPtbAtendimentoPrestado, "CO_ATENDIMENTO_PRESTADO"),
-      servEspecializado: mapBy(smallResults.DPtbServicoEspecializado, "CO_SERVICO_ESPECIALIZADO"),
+      tipoUnidade: mapBy(linhasDeParaOuFonte("DPtbTipoUnidade", smallResults.DPtbTipoUnidade), "CO_TIPO_UNIDADE"),
+      municipio: mapBy(linhasDeParaOuFonte("DPtbMunicipio", smallResults.DPtbMunicipio), "CO_MUNICIPIO"),
+      motivoDesab: mapBy(linhasDeParaOuFonte("DPtbMotivoDesativacao", smallResults.DPtbMotivoDesativacao), "CD_MOTIVO_DESAB"),
+      naturezaJur: mapBy(linhasDeParaOuFonte("DPtbNaturezaJuridica", smallResults.DPtbNaturezaJuridica), "CO_NATUREZA_JUR"),
+      tipoEstab: mapBy(linhasDeParaOuFonte("DPtbTipoEstabelecimento", smallResults.DPtbTipoEstabelecimento), "CO_TIPO_ESTABELECIMENTO"),
+      atividade: mapBy(linhasDeParaOuFonte("tbAtividade", smallResults.tbAtividade), "CO_ATIVIDADE"),
+      atendPrestado: mapBy(linhasDeParaOuFonte("DPtbAtendimentoPrestado", smallResults.DPtbAtendimentoPrestado), "CO_ATENDIMENTO_PRESTADO"),
+      servEspecializado: mapBy(linhasDeParaOuFonte("DPtbServicoEspecializado", smallResults.DPtbServicoEspecializado), "CO_SERVICO_ESPECIALIZADO"),
       atributo: new Map(
-        (smallResults.tbAtributo || [])
+        linhasDeParaOuFonte("tbAtributo", smallResults.tbAtributo)
           .filter(r => String(r.CO_INDICADOR) === "4")
           .map(r => [keyOf(r.CO_ATRIBUTO), caracteristicaLabel(r.DS_ATRIBUTO)])
       ),
-      instalFisica: mapBy(smallResults.DPtbInstalFisicaParaAssist, "CO_INSTALACAO"),
-      cbo: new Map((smallResults.DPCBO || []).map(r => [keyOf(stripCboLetters(r["CBO 2002"])), r["TIPO PROFISSIONAL"]])),
-      equipamento: mapBy(smallResults.DPtbEquipamento, "CO_EQUIPAMENTO"),
-      mediaEquip: new Map((smallResults.DPMediaEquip || []).map(r => [r.equipamento, r["média exames por equipamento"]]))
+      instalFisica: mapBy(linhasDeParaOuFonte("DPtbInstalFisicaParaAssist", smallResults.DPtbInstalFisicaParaAssist), "CO_INSTALACAO"),
+      cbo: new Map(linhasDeParaOuFonte("DPCBO", smallResults.DPCBO).map(r => [keyOf(stripCboLetters(r["CBO 2002"])), r["TIPO PROFISSIONAL"]])),
+      equipamento: mapBy(linhasDeParaOuFonte("DPtbEquipamento", smallResults.DPtbEquipamento), "CO_EQUIPAMENTO"),
+      mediaEquip: new Map(linhasDeParaOuFonte("DPMediaEquip", smallResults.DPMediaEquip).map(r => [r.equipamento, r["média exames por equipamento"]])),
+      gestaoAtributo: mapBy(linhasDeParaOuFonte("DPtbGestaotbAtributo", smallResults.DPtbGestaotbAtributo), "CO_GESTAO")
     };
 
     const crmRowsIniciais = (smallResults.TODAS_AS_CONTAS_ATIVAS_CNES || []).map(r => ({ ...r, CNES: r.CNES != null ? String(r.CNES).trim() : "" }));
@@ -859,7 +914,7 @@ $("btnLoadAll").addEventListener("click", async () => {
     const servDomiciliar = servicoCaracteristica(servRows, lk, "Atenção domiciliar");
 
     setStatus("Lendo e cruzando Atividade/Nível de Atenção...");
-    const progFundo = buildProgFundo(await loadLargeCsv("rlEstabProgFundo"));
+    const progFundo = buildProgFundo(await loadLargeCsv("rlEstabProgFundo"), lk);
 
     setStatus("Lendo e cruzando Instalações...");
     const instalacoes = buildInstalacoes(await loadLargeCsv("rlEstabInstFisiAssist"), lk);
@@ -2113,6 +2168,110 @@ $("c_btnSalvarPicklists").addEventListener("click", async () => {
   }
 });
 
+/* ---------------------------- Tabelas de/para ---------------------------- */
+let deParaAtual = {}; // { chave: {campo:valor,...} } da tabela selecionada, em edição
+let deParaTabelaAtual = null;
+
+function renderDeParaSelect(){
+  const sel = $("c_deparaSelect");
+  const nomes = Object.keys(DEPARA_KEY_FIELDS);
+  sel.innerHTML = nomes.map(n => `<option value="${n}">${n}</option>`).join("");
+  deParaTabelaAtual = nomes.includes(deParaTabelaAtual) ? deParaTabelaAtual : nomes[0];
+  sel.value = deParaTabelaAtual;
+  carregarDeParaConfigurada();
+}
+
+function carregarDeParaConfigurada(){
+  const cfg = (window.__config.deparas && window.__config.deparas[deParaTabelaAtual]) || {};
+  deParaAtual = JSON.parse(JSON.stringify(cfg)); // cópia editável
+  renderDeParaTabela();
+}
+
+function renderDeParaTabela(){
+  const tbody = $("c_deparaBody");
+  tbody.innerHTML = "";
+  Object.keys(deParaAtual).forEach(chave => {
+    const tr = document.createElement("tr");
+
+    const tdChave = document.createElement("td");
+    const inpChave = document.createElement("input");
+    inpChave.type = "text"; inpChave.value = chave; inpChave.style.cssText = "width:140px;font-size:12px;padding:3px 5px";
+    inpChave.addEventListener("change", () => {
+      if (inpChave.value && inpChave.value !== chave){
+        deParaAtual[inpChave.value] = deParaAtual[chave];
+        delete deParaAtual[chave];
+        renderDeParaTabela();
+      }
+    });
+    tdChave.appendChild(inpChave); tr.appendChild(tdChave);
+
+    const tdValores = document.createElement("td");
+    const inpValores = document.createElement("input");
+    inpValores.type = "text";
+    inpValores.value = JSON.stringify(deParaAtual[chave]);
+    inpValores.style.cssText = "width:100%;font-size:12px;padding:3px 5px;font-family:monospace";
+    inpValores.addEventListener("change", () => {
+      try{ deParaAtual[chave] = JSON.parse(inpValores.value); }
+      catch(e){ $("c_statusDePara").textContent = `JSON inválido na chave "${chave}" — não alterado.`; inpValores.value = JSON.stringify(deParaAtual[chave]); }
+    });
+    tdValores.appendChild(inpValores); tr.appendChild(tdValores);
+
+    const tdDel = document.createElement("td");
+    const btnDel = document.createElement("button");
+    btnDel.className = "btn-secondary-sm"; btnDel.textContent = "Remover";
+    btnDel.addEventListener("click", () => { delete deParaAtual[chave]; renderDeParaTabela(); });
+    tdDel.appendChild(btnDel); tr.appendChild(tdDel);
+
+    tbody.appendChild(tr);
+  });
+}
+
+$("c_deparaSelect").addEventListener("change", () => {
+  deParaTabelaAtual = $("c_deparaSelect").value;
+  carregarDeParaConfigurada();
+});
+
+$("c_btnCarregarDePara").addEventListener("click", async () => {
+  const tabela = deParaTabelaAtual;
+  const chaveField = DEPARA_KEY_FIELDS[tabela];
+  $("c_statusDePara").textContent = "Buscando no Drive...";
+  try{
+    const linhas = await appsScriptFetchFile(tabela);
+    const novo = {};
+    linhas.forEach(r => {
+      const chave = r[chaveField];
+      if (chave === null || chave === undefined || chave === "") return;
+      novo[String(chave)] = r;
+    });
+    deParaAtual = novo;
+    renderDeParaTabela();
+    $("c_statusDePara").textContent = `Carregado do Drive (${Object.keys(novo).length} linhas) — revise e clique em Salvar.`;
+  } catch(err){
+    console.error(err);
+    $("c_statusDePara").textContent = "Erro ao buscar no Drive: " + err.message;
+  }
+});
+
+$("c_btnAddLinhaDePara").addEventListener("click", () => {
+  let novaChave = "nova-chave";
+  let i = 1;
+  while (deParaAtual[novaChave] !== undefined){ novaChave = `nova-chave-${i++}`; }
+  deParaAtual[novaChave] = { [DEPARA_KEY_FIELDS[deParaTabelaAtual]]: novaChave };
+  renderDeParaTabela();
+});
+
+$("c_btnSalvarDePara").addEventListener("click", async () => {
+  $("c_statusDePara").textContent = "Salvando...";
+  try{
+    await appsScriptSaveJSON({ action: "saveDePara", tabela: deParaTabelaAtual, dados: deParaAtual });
+    await appsScriptFetchConfig();
+    $("c_statusDePara").textContent = "Salvo — a próxima 'Atualizar outras tabelas' já usa essa configuração em vez de buscar no Drive.";
+  } catch(err){
+    console.error(err);
+    $("c_statusDePara").textContent = "Erro ao salvar: " + err.message;
+  }
+});
+
 /* carrega quando a config global já tiver chegado (ou assim que chegar) */
 async function iniciar(){
   if (!window.__config || !window.__config.colunas){
@@ -2120,6 +2279,7 @@ async function iniciar(){
   }
   carregarColunasNaTela();
   renderPicklistSelect();
+  renderDeParaSelect();
 }
 iniciar();
 
