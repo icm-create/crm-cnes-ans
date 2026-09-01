@@ -254,12 +254,21 @@
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <input type="text" id="a_fBusca" placeholder="buscar (CNES, nome, CNPJ...)" style="padding:6px 8px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:220px">
+      <label style="font-size:12px;color:#555;display:flex;align-items:center;gap:5px">
+        Focar coluna:
+        <select id="a_fColuna" style="padding:5px 6px;border:1px solid #ccc;border-radius:5px;font-size:12px"></select>
+      </label>
+      <select id="a_fComparacao" style="padding:5px 6px;border:1px solid #ccc;border-radius:5px;font-size:12px">
+        <option value="">Todos</option>
+        <option value="dif">Só onde CNES ≠ CRM</option>
+        <option value="igual">Só onde CNES = CRM</option>
+      </select>
       <button id="a_btnSelTodas" class="btn-green-outline">Selecionar filtradas</button>
       <button id="a_btnDeselTodas" class="btn-secondary">Desmarcar filtradas</button>
       <button id="a_btnExport" class="btn-green-outline" disabled>Exportar (.xlsx)</button>
     </div>
   </div>
-  <div class="cfg-note" style="padding:0 20px 8px">Marque linhas (uma a uma ou pelo filtro + "Selecionar filtradas") e, no cabeçalho de cada campo, clique em "CNES → sel." ou "CRM → sel." pra aplicar a fonte só às linhas marcadas. "Auto → sel." volta ao cálculo padrão (FINAL).</div>
+  <div class="cfg-note" style="padding:0 20px 8px">Marque linhas (uma a uma ou pelo filtro + "Selecionar filtradas") e, no cabeçalho de cada campo, clique em "CNES → sel." ou "CRM → sel." pra aplicar a fonte só às linhas marcadas. "Auto → sel." volta ao cálculo padrão (FINAL). Use "Focar coluna" + o filtro de comparação pra revisar campo por campo.</div>
   <div class="main">
     <div class="table-wrap">
       <div class="empty-state" id="a_emptyState">Clique em "Atualizar outras tabelas" e "Atualizar tabelas CRM" (na aba Início) para carregar os dados.</div>
@@ -1434,7 +1443,7 @@ function buildCrmContas(rawRows){
    Comparação final — 41 pares + regras especiais (porte exato do roteiro)
    ========================================================================= */
 const PAIRS = [
-  ["Conta_ID","Conta_ID"], ["CPF","CPF"], ["CNPJ","CNPJ"], ["Cidade","CIDADE"], ["Empresa","Nome Fantasia"],
+  ["CPF","CPF"], ["CNPJ","CNPJ"], ["Cidade","CIDADE"], ["Empresa","Nome Fantasia"],
   ["Razão Social","Razão social"], ["Tipo de Entidade","Tipo de entidade"], ["Logradouro","Logradouro"],
   ["Complemento","Complemento"], ["Bairro","Bairro"], ["CEP","CEP"], ["Telefone Principal","Telefone"],
   ["Última atualização CNES","última atualização CNES"], ["Motivo desativação CNES","Motivo desativação"],
@@ -1462,6 +1471,7 @@ function buildAtualizarDadosCnes(crmRows, cnesRows){
     if (!cnes) return;
 
     const row = { key: `${crm.Conta_ID}__${cnes.CNES}`, CRM_raw: crm, CNES_raw: cnes };
+    row["CRM__Conta_ID"] = crm.Conta_ID;
     PAIRS.forEach(([crmCol, cnesCol]) => {
       row[`CRM__${crmCol}`] = crm[crmCol];
       row[`CNES__${crmCol}`] = cnes[cnesCol];
@@ -1528,15 +1538,32 @@ function fonteAtiva(row, col){
 /* =========================================================================
    Filtro
    ========================================================================= */
+function popularSeletorColuna(){
+  const sel = $("a_fColuna");
+  sel.innerHTML = '<option value="">(nenhuma)</option>' + ALL_COLS.map(c => `<option value="${c}">${c}</option>`).join("");
+}
+
 function getFilteredRows(){
   const busca = $("a_fBusca").value.trim().toLowerCase();
-  if (!busca) return allRows;
+  const colFoco = $("a_fColuna").value;
+  const comparacao = $("a_fComparacao").value;
   return allRows.filter(r => {
-    const hay = `${r.CNES_raw.CNES} ${r["CNES__Empresa"]} ${r["CRM__Empresa"]} ${r["CNES__CNPJ"]} ${r["CRM__CNPJ"]}`.toLowerCase();
-    return hay.includes(busca);
+    if (busca){
+      const hay = `${r.CNES_raw.CNES} ${r["CNES__Empresa"]} ${r["CRM__Empresa"]} ${r["CNES__CNPJ"]} ${r["CRM__CNPJ"]}`.toLowerCase();
+      if (!hay.includes(busca)) return false;
+    }
+    if (colFoco && comparacao){
+      const vCnes = r[`CNES__${colFoco}`], vCrm = r[`CRM__${colFoco}`];
+      const iguais = (vCnes ?? "") === (vCrm ?? "");
+      if (comparacao === "dif" && iguais) return false;
+      if (comparacao === "igual" && !iguais) return false;
+    }
+    return true;
   });
 }
 $("a_fBusca").addEventListener("input", renderTable);
+$("a_fColuna").addEventListener("change", renderTable);
+$("a_fComparacao").addEventListener("change", renderTable);
 
 $("a_btnSelTodas").addEventListener("click", () => {
   getFilteredRows().forEach(r => selecionadas.add(r.key));
@@ -1559,8 +1586,12 @@ function aplicarFonteNasSelecionadas(col, fonte){
 
 /* =========================================================================
    Render — cada campo mostra 3 colunas lado a lado: CNES | CRM | FINAL
+   (exceto CRM_ONLY_COLS, que só existem do lado do CRM — sem par no CNES,
+   sem coluna FINAL, sem botão de forçar fonte)
    ========================================================================= */
+const CRM_ONLY_COLS = ["Conta_ID"];
 const ALL_COLS = [...PAIRS.map(p => p[0]), ...SPECIAL_COLUMNS];
+popularSeletorColuna();
 
 function renderTable(){
   const filtered = getFilteredRows();
@@ -1581,6 +1612,13 @@ function renderTable(){
   thChk.className = "grp-check col-frozen";
   thChk.textContent = "";
   trh.appendChild(thChk);
+
+  CRM_ONLY_COLS.forEach(col => {
+    const th = document.createElement("th");
+    th.className = "grp-crm";
+    th.textContent = `${col} (CRM)`;
+    trh.appendChild(th);
+  });
 
   ALL_COLS.forEach(col => {
     [["CNES","grp-cnes"], ["CRM","grp-crm"], ["FINAL","grp-final"]].forEach(([tipo, classe]) => {
@@ -1626,6 +1664,13 @@ function renderTable(){
     tdChk.appendChild(chk);
     tr.appendChild(tdChk);
 
+    CRM_ONLY_COLS.forEach(col => {
+      const td = document.createElement("td");
+      td.className = "grp-crm";
+      td.textContent = row[`CRM__${col}`] ?? "";
+      tr.appendChild(td);
+    });
+
     ALL_COLS.forEach(col => {
       const ativa = fonteAtiva(row, col);
       const vCnes = row[`CNES__${col}`], vCrm = row[`CRM__${col}`], vFinal = valueFor(row, col);
@@ -1656,8 +1701,10 @@ function renderTable(){
    Exportar
    ========================================================================= */
 $("a_btnExport").addEventListener("click", () => {
+  const EXPORT_COLS = [...CRM_ONLY_COLS, ...ALL_COLS];
   const rows = allRows.map(row => {
     const o = {};
+    CRM_ONLY_COLS.forEach(col => { o[col] = row[`CRM__${col}`]; });
     ALL_COLS.forEach(col => {
       let v = valueFor(row, col);
       if (col === "CPF" || col === "CNPJ") v = alnumOnly(v);
@@ -1666,7 +1713,7 @@ $("a_btnExport").addEventListener("click", () => {
     });
     return o;
   });
-  const ws = XLSX.utils.json_to_sheet(rows, { header: ALL_COLS });
+  const ws = XLSX.utils.json_to_sheet(rows, { header: EXPORT_COLS });
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Atualizar Contas CRM");
   const stamp = new Date().toISOString().slice(0,10);
