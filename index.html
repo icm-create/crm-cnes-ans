@@ -56,8 +56,11 @@
   th.grp-cnes{background:var(--cnes-bg);color:var(--cnes-fg);border-bottom-color:var(--cnes-border)}
   th.grp-crm{background:var(--crm-bg);color:var(--crm-fg);border-bottom-color:var(--crm-border)}
   th.grp-decisao{background:#eee;color:#333}
+  th.col-frozen{position:sticky;left:0;z-index:3}
+  td.col-frozen{position:sticky;left:0;z-index:1;background:#fff;box-shadow:2px 0 4px rgba(0,0,0,0.08)}
   tbody td{padding:6px 10px;border-bottom:1px solid #eee}
   tbody tr:hover{background:#fafbfd}
+  tbody tr:hover td.col-frozen{background:#fafbfd}
   tbody tr.is-desconsiderada{opacity:.35}
   td.grp-cnes{background:#f5fafd}
   td.grp-crm{background:#f6fbf7}
@@ -113,6 +116,16 @@
   th.grp-crm{background:var(--crm-bg);color:var(--crm-fg)}
   th.grp-final{background:var(--final-bg);color:var(--final-fg)}
   th select{font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid #ccc;margin-top:3px;width:100%}
+  th.col-frozen{position:sticky;left:0;z-index:3}
+  td.col-frozen{position:sticky;left:0;z-index:1;background:#fff;box-shadow:2px 0 4px rgba(0,0,0,0.08)}
+  th.grp-check{background:#eee;color:#333}
+  td.grp-check{background:#fff}
+  .mini-btn{font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;margin-right:3px;margin-top:3px}
+  .mini-btn.active{font-weight:700}
+  .mini-btn.mini-cnes.active{background:var(--cnes-bg);border-color:var(--cnes-border)}
+  .mini-btn.mini-crm.active{background:var(--crm-bg);border-color:var(--crm-border)}
+  td.cell-override-cnes{background:var(--cnes-bg) !important}
+  td.cell-override-crm{background:var(--crm-bg) !important}
   tbody td{padding:5px 8px;border-bottom:1px solid #eee}
   td.grp-cnes{background:#f5fafd}
   td.grp-crm{background:#f6fbf7}
@@ -126,7 +139,8 @@
 <body>
 
 <nav class="app-nav">
-  <button id="navLocalizar" class="active">Localizar CNES de Contas CRM</button>
+  <button id="navInicio" class="active">Início</button>
+  <button id="navLocalizar">Localizar CNES de Contas CRM</button>
   <button id="navAtualizar">Atualizar Contas CRM</button>
   <button id="navIncluir">Incluir Novas Contas CRM</button>
   <button id="navConfiguracoes">Configurações</button>
@@ -137,21 +151,37 @@
     <h1>CNES × CRM</h1>
     <div class="status" id="statusLine">Pronto — sem login necessário</div>
   </div>
-  <div class="toolbar">
-    <button id="btnLoadAll" class="btn-primary">Atualizar tudo</button>
-    <button id="btnLoadCrmOnly" class="btn-secondary">Atualizar tabelas CRM</button>
-    <button id="btnToggleLargePanel" class="btn-secondary">Incluir tabelas grandes</button>
-  </div>
 </header>
 
-<div class="large-panel" id="largeFilesPanel" style="display:none">
-  <div class="row">
-    <span class="cfg-note">Selecione, uma a uma, as tabelas grandes abaixo (sem renomear nada — mesmo com sufixo de mês/ano no nome). Uma base só, compartilhada pelas duas telas.</span>
+<div id="view-inicio" class="view active">
+  <div class="main" style="max-width:900px">
+    <h3 style="margin-top:0">Atualizar dados</h3>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+      <button id="btnToggleLargePanel" class="btn-primary">1 — Incluir tabelas grandes</button>
+      <button id="btnLoadAll" class="btn-secondary">2 — Atualizar outras tabelas</button>
+      <button id="btnLoadCrmOnly" class="btn-secondary">3 — Atualizar tabelas CRM</button>
+    </div>
+
+    <div class="large-panel" id="largeFilesPanel">
+      <div class="row">
+        <span class="cfg-note">Selecione, uma a uma, as tabelas grandes abaixo (sem renomear nada — mesmo com sufixo de mês/ano no nome). Uma base só, compartilhada pelas 3 telas.</span>
+      </div>
+      <div id="largeFilesRows"></div>
+    </div>
+
+    <h3>Últimas atualizações</h3>
+    <div class="table-wrap" style="max-height:none">
+      <table>
+        <tbody>
+          <tr><td style="padding:6px 10px;font-weight:600;width:220px">Outras tabelas (CNES/de-para)</td><td style="padding:6px 10px" id="ultAtOutras">nunca atualizado nesta sessão</td></tr>
+          <tr><td style="padding:6px 10px;font-weight:600">Tabelas do CRM</td><td style="padding:6px 10px" id="ultAtCrm">nunca atualizado nesta sessão</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
-  <div id="largeFilesRows"></div>
 </div>
 
-<div id="view-localizar" class="view active">
+<div id="view-localizar" class="view">
   <div class="view-subheader">
     <div class="legend">
       <span><i style="background:var(--cnes-bg);border:1px solid var(--cnes-border)"></i> Campo do CNES</span>
@@ -220,12 +250,19 @@
   <div class="view-subheader">
     <div class="summary" id="a_summary" style="display:none">
       <div class="card"><b id="a_sumTotal">0</b>contas com CNES cruzado</div>
+      <div class="card"><b id="a_sumSelecionadas">0</b>linhas selecionadas</div>
     </div>
-    <button id="a_btnExport" class="btn-green-outline" disabled>Exportar (.xlsx)</button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="text" id="a_fBusca" placeholder="buscar (CNES, nome, CNPJ...)" style="padding:6px 8px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:220px">
+      <button id="a_btnSelTodas" class="btn-green-outline">Selecionar filtradas</button>
+      <button id="a_btnDeselTodas" class="btn-secondary">Desmarcar filtradas</button>
+      <button id="a_btnExport" class="btn-green-outline" disabled>Exportar (.xlsx)</button>
+    </div>
   </div>
+  <div class="cfg-note" style="padding:0 20px 8px">Marque linhas (uma a uma ou pelo filtro + "Selecionar filtradas") e, no cabeçalho de cada campo, clique em "CNES → sel." ou "CRM → sel." pra aplicar a fonte só às linhas marcadas. "Auto → sel." volta ao cálculo padrão (FINAL).</div>
   <div class="main">
     <div class="table-wrap">
-      <div class="empty-state" id="a_emptyState">Clique em "Atualizar tudo" (no topo) para carregar os dados.</div>
+      <div class="empty-state" id="a_emptyState">Clique em "Atualizar outras tabelas" e "Atualizar tabelas CRM" (na aba Início) para carregar os dados.</div>
       <table id="a_mainTable" style="display:none">
         <thead></thead>
         <tbody></tbody>
@@ -414,8 +451,8 @@ function renderLargePanel(){
 renderLargePanel();
 
 $("btnToggleLargePanel").addEventListener("click", () => {
-  const panel = $("largeFilesPanel");
-  panel.style.display = panel.style.display === "none" ? "block" : "none";
+  mostrarView("inicio");
+  $("largeFilesPanel").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 function readFileAsText(file){
@@ -807,7 +844,6 @@ $("btnLoadAll").addEventListener("click", async () => {
 
     const crmRowsIniciais = (smallResults.TODAS_AS_CONTAS_ATIVAS_CNES || []).map(r => ({ ...r, CNES: r.CNES != null ? String(r.CNES).trim() : "" }));
     const crmByCnes = new Map(crmRowsIniciais.filter(c => c.CNES && c.CNES !== "0").map(c => [keyOf(c.CNES), c]));
-
     setStatus("Lendo tbEstabelecimento (arquivo grande)...");
     const tbEstabRaw = await loadLargeCsv("tbEstabelecimento");
     let cnesRows = buildTbEstabelecimentoBase(tbEstabRaw, lk, crmByCnes);
@@ -870,11 +906,16 @@ $("btnLoadAll").addEventListener("click", async () => {
     });
 
     cnesRowsCache = cnesRows;
-    crmRowsCache = crmRowsIniciais;
+    ultimaAtualizacao.outras = new Date();
+    atualizarUltimasAtualizacoes();
 
-    setStatus("Atualizando as telas...");
-    notificarTelas();
-    setStatus(`Pronto — dados atualizados (${cnesRowsCache.length} estabelecimentos CNES, ${crmRowsCache.length} contas CRM).`);
+    if (crmRowsCache){
+      setStatus("Atualizando as telas...");
+      notificarTelas();
+      setStatus(`Pronto — outras tabelas atualizadas (${cnesRowsCache.length} estabelecimentos CNES). CRM continua com os dados de antes.`);
+    } else {
+      setStatus(`Outras tabelas prontas (${cnesRowsCache.length} estabelecimentos CNES). Agora clique em "3 — Atualizar tabelas CRM" pra completar.`);
+    }
   } catch(err){
     console.error(err);
     setStatus("Erro: " + err.message);
@@ -884,19 +925,21 @@ $("btnLoadAll").addEventListener("click", async () => {
 });
 
 $("btnLoadCrmOnly").addEventListener("click", async () => {
-  if (!cnesRowsCache){
-    setStatus("Ainda não há dados do CNES carregados nesta sessão — clique em \"Atualizar tudo\" pelo menos uma vez primeiro.");
-    return;
-  }
   setBotoesGlobaisDesabilitados(true);
   try{
     setStatus("Lendo base do CRM (TODAS AS CONTAS ATIVAS CNES)...");
     const raw = await appsScriptFetchFile("TODAS_AS_CONTAS_ATIVAS_CNES");
     crmRowsCache = (raw || []).map(r => ({ ...r, CNES: r.CNES != null ? String(r.CNES).trim() : "" }));
+    ultimaAtualizacao.crm = new Date();
+    atualizarUltimasAtualizacoes();
 
-    setStatus("Atualizando as telas...");
-    notificarTelas();
-    setStatus(`Pronto — CRM atualizado (${crmRowsCache.length} contas).`);
+    if (cnesRowsCache){
+      setStatus("Atualizando as telas...");
+      notificarTelas();
+      setStatus(`Pronto — CRM atualizado (${crmRowsCache.length} contas).`);
+    } else {
+      setStatus(`CRM pronto (${crmRowsCache.length} contas). Agora clique em "2 — Atualizar outras tabelas" pra completar.`);
+    }
   } catch(err){
     console.error(err);
     setStatus("Erro: " + err.message);
@@ -904,6 +947,14 @@ $("btnLoadCrmOnly").addEventListener("click", async () => {
     setBotoesGlobaisDesabilitados(false);
   }
 });
+
+let ultimaAtualizacao = { outras: null, crm: null };
+function atualizarUltimasAtualizacoes(){
+  const fmt = (d) => d ? d.toLocaleString("pt-BR") : "nunca atualizado nesta sessão";
+  $("ultAtOutras").textContent = fmt(ultimaAtualizacao.outras);
+  $("ultAtCrm").textContent = fmt(ultimaAtualizacao.crm);
+}
+
 
 /* =========================================================================
    Carrega a configuração (colunas/picklists) uma vez ao abrir a página —
@@ -915,7 +966,7 @@ appsScriptFetchConfig().catch(err => console.warn("Não foi possível carregar c
 /* =========================================================================
    Navegação entre telas
    ========================================================================= */
-const VIEWS = ["localizar","atualizar","incluir","configuracoes"];
+const VIEWS = ["inicio","localizar","atualizar","incluir","configuracoes"];
 function mostrarView(nome){
   VIEWS.forEach(v => {
     $("view-" + v).classList.toggle("active", v === nome);
@@ -926,6 +977,7 @@ $("navLocalizar").addEventListener("click", () => mostrarView("localizar"));
 $("navAtualizar").addEventListener("click", () => mostrarView("atualizar"));
 $("navIncluir").addEventListener("click", () => mostrarView("incluir"));
 $("navConfiguracoes").addEventListener("click", () => mostrarView("configuracoes"));
+$("navInicio").addEventListener("click", () => mostrarView("inicio"));
 </script>
 
 <script>
@@ -1144,6 +1196,9 @@ function getFilteredRows(){
   });
 }
 
+const EDITABLE_COLUMNS = new Set(["BillingStreet","MV_Numero__c","COMPLEMENTO__c"]);
+let editedValues = {}; // "rowKey__colKey" -> valor editado
+
 function renderTable(){
   const filtered = getFilteredRows();
   $("emptyState").style.display = filtered.length ? "none" : "block";
@@ -1158,7 +1213,7 @@ function renderTable(){
   const trh = document.createElement("tr");
   const thDecisao = document.createElement("th");
   thDecisao.textContent = "Decisão";
-  thDecisao.className = "grp-decisao";
+  thDecisao.className = "grp-decisao col-frozen";
   trh.appendChild(thDecisao);
   COLUMNS.forEach(c => {
     const th = document.createElement("th");
@@ -1174,7 +1229,7 @@ function renderTable(){
     if (decision === "Desconsiderar") tr.classList.add("is-desconsiderada");
 
     const tdDec = document.createElement("td");
-    tdDec.className = "grp-decisao";
+    tdDec.className = "grp-decisao col-frozen";
     const cellWrap = document.createElement("div");
     cellWrap.className = "decision-cell";
     const btnInc = document.createElement("button");
@@ -1197,6 +1252,14 @@ function renderTable(){
         span.className = "pill " + (row[c.key] === "Sim" ? "pill-sim" : "pill-avaliar");
         span.textContent = row[c.key];
         td.appendChild(span);
+      } else if (EDITABLE_COLUMNS.has(c.key)){
+        const editKey = `${row.key}__${c.key}`;
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.value = editedValues[editKey] ?? row[c.key] ?? "";
+        inp.style.cssText = "width:130px;padding:3px 6px;font-size:12px;border:1px solid #ccc;border-radius:4px";
+        inp.addEventListener("change", () => { editedValues[editKey] = inp.value; });
+        td.appendChild(inp);
       } else {
         td.textContent = row[c.key] ?? "";
       }
@@ -1247,11 +1310,18 @@ $("btnBulkDesconsiderar").addEventListener("click", async () => {
 /* =========================================================================
    Exportar (.xlsx) — só linhas marcadas "Incluir"
    ========================================================================= */
-const EXPORT_COLUMNS = ["CNES__c","id"];
+const EXPORT_COLUMNS = ["CNES__c","id","BillingStreet","MV_Numero__c","COMPLEMENTO__c"];
 
 $("btnExport").addEventListener("click", () => {
   const rows = allRows.filter(r => rowDecisions[r.key] === "Incluir")
-    .map(r => { const o = {}; EXPORT_COLUMNS.forEach(k => o[k] = r[k]); return o; });
+    .map(r => {
+      const o = {};
+      EXPORT_COLUMNS.forEach(k => {
+        const editKey = `${r.key}__${k}`;
+        o[k] = editedValues[editKey] ?? r[k];
+      });
+      return o;
+    });
   if (!rows.length) return;
   const ws = XLSX.utils.json_to_sheet(rows, { header: EXPORT_COLUMNS });
   const wb = XLSX.utils.book_new();
@@ -1336,7 +1406,7 @@ function buildAtualizarDadosCnes(crmRows, cnesRows){
     const cnes = cnesByCnes.get(keyOf(crm.CNES));
     if (!cnes) return;
 
-    const row = { CRM_raw: crm, CNES_raw: cnes };
+    const row = { key: `${crm.Conta_ID}__${cnes.CNES}`, CRM_raw: crm, CNES_raw: cnes };
     PAIRS.forEach(([crmCol, cnesCol]) => {
       row[`CRM__${crmCol}`] = crm[crmCol];
       row[`CNES__${crmCol}`] = cnes[cnesCol];
@@ -1380,29 +1450,70 @@ function telefoneLimpo(v){
 }
 
 /* =========================================================================
-   Seletor de fonte por coluna (FINAL / CNES / CRM)
+   Seleção de linhas + fonte por linha/coluna (CNES / CRM / automático=FINAL)
    ========================================================================= */
+let selecionadas = new Set(); // row.key marcados
+let overrides = {};           // "rowKey::col" -> "CNES" | "CRM" (ausente = automático/FINAL)
+
 function initColumnSources(){
-  columnSource = {};
-  PAIRS.forEach(([crmCol]) => columnSource[crmCol] = "FINAL");
-  SPECIAL_COLUMNS.forEach(c => columnSource[c] = "FINAL");
+  overrides = {};
+  selecionadas = new Set();
 }
 
 function valueFor(row, col){
-  const src = columnSource[col] || "FINAL";
-  return row[`${src}__${col}`];
+  const ov = overrides[`${row.key}::${col}`];
+  if (ov === "CNES" || ov === "CRM") return row[`${ov}__${col}`];
+  return row[`FINAL__${col}`];
+}
+
+function fonteAtiva(row, col){
+  return overrides[`${row.key}::${col}`] || "AUTO";
 }
 
 /* =========================================================================
-   Render
+   Filtro
+   ========================================================================= */
+function getFilteredRows(){
+  const busca = $("a_fBusca").value.trim().toLowerCase();
+  if (!busca) return allRows;
+  return allRows.filter(r => {
+    const hay = `${r.CNES_raw.CNES} ${r["CNES__Empresa"]} ${r["CRM__Empresa"]} ${r["CNES__CNPJ"]} ${r["CRM__CNPJ"]}`.toLowerCase();
+    return hay.includes(busca);
+  });
+}
+$("a_fBusca").addEventListener("input", renderTable);
+
+$("a_btnSelTodas").addEventListener("click", () => {
+  getFilteredRows().forEach(r => selecionadas.add(r.key));
+  renderTable();
+});
+$("a_btnDeselTodas").addEventListener("click", () => {
+  getFilteredRows().forEach(r => selecionadas.delete(r.key));
+  renderTable();
+});
+
+function aplicarFonteNasSelecionadas(col, fonte){
+  if (!selecionadas.size) return;
+  selecionadas.forEach(rowKey => {
+    const chave = `${rowKey}::${col}`;
+    if (fonte === "AUTO") delete overrides[chave];
+    else overrides[chave] = fonte;
+  });
+  renderTable();
+}
+
+/* =========================================================================
+   Render — cada campo mostra 3 colunas lado a lado: CNES | CRM | FINAL
    ========================================================================= */
 const ALL_COLS = [...PAIRS.map(p => p[0]), ...SPECIAL_COLUMNS];
 
 function renderTable(){
+  const filtered = getFilteredRows();
   $("a_emptyState").style.display = allRows.length ? "none" : "block";
   $("a_mainTable").style.display = allRows.length ? "table" : "none";
   $("a_summary").style.display = allRows.length ? "flex" : "none";
   $("a_sumTotal").textContent = allRows.length;
+  $("a_sumSelecionadas").textContent = selecionadas.size;
   $("a_btnExport").disabled = allRows.length === 0;
 
   const thead = document.querySelector("#a_mainTable thead");
@@ -1411,41 +1522,78 @@ function renderTable(){
   tbody.innerHTML = "";
 
   const trh = document.createElement("tr");
+  const thChk = document.createElement("th");
+  thChk.className = "grp-check col-frozen";
+  thChk.textContent = "";
+  trh.appendChild(thChk);
+
   ALL_COLS.forEach(col => {
-    const th = document.createElement("th");
-    th.className = "grp-final";
-    const title = document.createElement("span");
-    title.className = "col-title";
-    title.textContent = col;
-    th.appendChild(title);
-    const sel = document.createElement("select");
-    ["FINAL","CNES","CRM"].forEach(opt => {
-      const o = document.createElement("option");
-      o.value = opt; o.textContent = opt;
-      if (columnSource[col] === opt) o.selected = true;
-      sel.appendChild(o);
+    [["CNES","grp-cnes"], ["CRM","grp-crm"], ["FINAL","grp-final"]].forEach(([tipo, classe]) => {
+      const th = document.createElement("th");
+      th.className = classe;
+      const title = document.createElement("span");
+      title.className = "col-title";
+      title.textContent = `${col} (${tipo})`;
+      th.appendChild(title);
+      if (tipo === "FINAL"){
+        const btnCnes = document.createElement("button");
+        btnCnes.className = "mini-btn mini-cnes"; btnCnes.textContent = "CNES → sel.";
+        btnCnes.title = "Usar o valor do CNES nas linhas marcadas, pra este campo";
+        btnCnes.addEventListener("click", () => aplicarFonteNasSelecionadas(col, "CNES"));
+        const btnCrm = document.createElement("button");
+        btnCrm.className = "mini-btn mini-crm"; btnCrm.textContent = "CRM → sel.";
+        btnCrm.title = "Usar o valor do CRM nas linhas marcadas, pra este campo";
+        btnCrm.addEventListener("click", () => aplicarFonteNasSelecionadas(col, "CRM"));
+        const btnAuto = document.createElement("button");
+        btnAuto.className = "mini-btn"; btnAuto.textContent = "Auto → sel.";
+        btnAuto.title = "Voltar ao cálculo automático (FINAL) nas linhas marcadas, pra este campo";
+        btnAuto.addEventListener("click", () => aplicarFonteNasSelecionadas(col, "AUTO"));
+        th.appendChild(btnCnes); th.appendChild(btnCrm); th.appendChild(document.createElement("br")); th.appendChild(btnAuto);
+      }
+      trh.appendChild(th);
     });
-    sel.addEventListener("change", () => { columnSource[col] = sel.value; renderTable(); });
-    th.appendChild(sel);
-    trh.appendChild(th);
   });
   thead.appendChild(trh);
 
   const frag = document.createDocumentFragment();
-  allRows.slice(0, 500).forEach(row => {
+  filtered.slice(0, 300).forEach(row => {
     const tr = document.createElement("tr");
+
+    const tdChk = document.createElement("td");
+    tdChk.className = "grp-check col-frozen";
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.checked = selecionadas.has(row.key);
+    chk.addEventListener("change", () => {
+      if (chk.checked) selecionadas.add(row.key); else selecionadas.delete(row.key);
+      $("a_sumSelecionadas").textContent = selecionadas.size;
+    });
+    tdChk.appendChild(chk);
+    tr.appendChild(tdChk);
+
     ALL_COLS.forEach(col => {
-      const td = document.createElement("td");
-      td.className = columnSource[col] === "CNES" ? "grp-cnes" : columnSource[col] === "CRM" ? "grp-crm" : "grp-final";
-      const v = valueFor(row, col);
-      td.textContent = v === null || v === undefined ? "" : v;
-      tr.appendChild(td);
+      const ativa = fonteAtiva(row, col);
+      const vCnes = row[`CNES__${col}`], vCrm = row[`CRM__${col}`], vFinal = valueFor(row, col);
+
+      const tdCnes = document.createElement("td");
+      tdCnes.className = "grp-cnes"; tdCnes.textContent = vCnes ?? "";
+      tr.appendChild(tdCnes);
+
+      const tdCrm = document.createElement("td");
+      tdCrm.className = "grp-crm"; tdCrm.textContent = vCrm ?? "";
+      tr.appendChild(tdCrm);
+
+      const tdFinal = document.createElement("td");
+      tdFinal.className = "grp-final" + (ativa === "CNES" ? " cell-override-cnes" : ativa === "CRM" ? " cell-override-crm" : "");
+      tdFinal.textContent = vFinal ?? "";
+      tdFinal.title = ativa === "AUTO" ? "Automático (FINAL)" : `Forçado: ${ativa}`;
+      tr.appendChild(tdFinal);
     });
     frag.appendChild(tr);
   });
   tbody.appendChild(frag);
-  if (allRows.length > 500){
-    setStatus(`Pronto — ${allRows.length} contas (mostrando as primeiras 500 na tela; a exportação sai completa).`);
+  if (filtered.length > 300){
+    setStatus(`Mostrando as primeiras 300 de ${filtered.length} linhas filtradas na tela; a exportação sai completa.`);
   }
 }
 
