@@ -395,11 +395,11 @@
 
   <h3>Tabelas de/para (originais do CNES + colunas tratadas na mão)</h3>
   <div class="cfg-note" style="margin-bottom:8px">
-    As colunas cinzas vêm sempre frescas do arquivo do Drive (atualizam sozinhas em "2 — Atualizar outras tabelas"). As colunas roxas são as que a gente preenche na mão — ficam salvas aqui e sobrepõem o valor original quando existirem. Linhas com <span style="background:#fdeacb;padding:1px 6px;border-radius:4px">fundo laranja</span> têm alguma coluna manual vazia — são os "gaps" (código novo do CNES que ainda não classificamos).
+    As colunas cinzas vêm sempre frescas do arquivo do Drive (atualizam sozinhas em "2 — Atualizar outras tabelas" — essa tela reaproveita a mesma leitura, sem buscar de novo). As colunas roxas são as que a gente preenche na mão — ficam salvas aqui e sobrepõem o valor original quando existirem. Linhas com <span style="background:#fdeacb;padding:1px 6px;border-radius:4px">fundo laranja</span> têm alguma coluna manual vazia — são os "gaps" (código novo do CNES que ainda não classificamos).
   </div>
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
     <select id="c_deparaSelect"></select>
-    <button id="c_btnCarregarDePara" class="btn-secondary">Atualizar do Drive agora</button>
+    <button id="c_btnCarregarDePara" class="btn-secondary">Forçar nova busca no Drive (sem passar pelo botão 2)</button>
     <button id="c_btnSalvarDePara" class="btn-primary">Salvar ajustes manuais</button>
     <label style="font-size:12px;color:#555;display:flex;align-items:center;gap:5px">
       <input type="checkbox" id="c_deparaSoGaps"> mostrar só os gaps
@@ -523,7 +523,8 @@ async function appsScriptFetchFile(chave){
 /* =========================================================================
    Configuração (colunas + picklists) — leitura e gravação via Apps Script
    ========================================================================= */
-window.__config = { colunas: [], picklists: {} };
+window.__config = { colunas: [], picklists: {}, deparas: {} };
+let __configCarregada = false;
 
 async function appsScriptFetchConfig(){
   const url = `${CONFIG.APPS_SCRIPT_URL}?action=config`;
@@ -531,7 +532,8 @@ async function appsScriptFetchConfig(){
   if (!res.ok) throw new Error(`Falha ao buscar configuração: ${res.status}`);
   const data = await res.json();
   if (data.erro) throw new Error(`Apps Script retornou erro na configuração: ${data.erro}`);
-  window.__config = { colunas: data.colunas || [], picklists: data.picklists || {} };
+  window.__config = { colunas: data.colunas || [], picklists: data.picklists || {}, deparas: data.deparas || {} };
+  __configCarregada = true;
   return window.__config;
 }
 
@@ -605,15 +607,16 @@ const DEPARA_CAMPOS_ESPERADOS = {
   TipoLeitos: ["no_tp_leito"]
 };
 
-/* Devolve as linhas "originais" de uma tabela de/para — do próprio arquivo,
-   ou (se ela for um recorte de outra) filtrando a tabela-fonte. */
+/* Devolve as linhas "originais" de uma tabela de/para — reaproveitando o
+   que "2 — Atualizar outras tabelas" já buscou nesta sessão (window.__smallResultsCache),
+   sem chamada nova ao Drive. Se ainda não rodou nesta sessão, busca na hora
+   (só pra essa tabela, sem afetar o resto do app). */
 async function buscarLinhasOriginais(nomeTabela){
   const especial = DEPARA_ORIGEM_ESPECIAL[nomeTabela];
-  if (especial){
-    const fonte = await appsScriptFetchFile(especial.fonteChave);
-    return fonte.filter(especial.filtro);
-  }
-  return await appsScriptFetchFile(nomeTabela);
+  const chaveFonte = especial ? especial.fonteChave : nomeTabela;
+  const cache = window.__smallResultsCache;
+  const fonte = (cache && cache[chaveFonte]) ? cache[chaveFonte] : await appsScriptFetchFile(chaveFonte);
+  return especial ? fonte.filter(especial.filtro) : fonte;
 }
 
 /* Algumas tabelas usam chave composta (mais de uma coluna), ex.: DPtbSubTipo
@@ -940,6 +943,7 @@ $("btnLoadAll").addEventListener("click", async () => {
     setStatus("Lendo tabelas pequenas (Apps Script)...");
     const smallResults = {};
     await Promise.all(SMALL_KEYS.map(async k => { smallResults[k] = await appsScriptFetchFile(k); }));
+    window.__smallResultsCache = smallResults; // reaproveitado pela tela Configurações (de/para), sem buscar de novo
 
     const lk = {
       tipoUnidade: mapBy(linhasDeParaMescladas("DPtbTipoUnidade", smallResults.DPtbTipoUnidade), "CO_TIPO_UNIDADE"),
@@ -2285,15 +2289,23 @@ function renderDeParaSelect(){
   carregarDeParaDoDrive();
 }
 
-async function carregarDeParaDoDrive(){
+async function carregarDeParaDoDrive(forcarBuscaNova){
   const tabela = deParaTabelaAtual;
-  $("c_statusDePara").textContent = "Buscando no Drive...";
+  const especial = DEPARA_ORIGEM_ESPECIAL[tabela];
+  const chaveFonte = especial ? especial.fonteChave : tabela;
+  $("c_statusDePara").textContent = window.__smallResultsCache ? "Lendo (reaproveitando o que '2 — Atualizar outras tabelas' já buscou)..." : "Buscando no Drive...";
   try{
+    if (forcarBuscaNova){
+      const fresco = await appsScriptFetchFile(chaveFonte);
+      if (!window.__smallResultsCache) window.__smallResultsCache = {};
+      window.__smallResultsCache[chaveFonte] = fresco;
+    }
     deParaLinhasOriginais = await buscarLinhasOriginais(tabela);
     const cfg = (window.__config.deparas && window.__config.deparas[tabela]) || {};
     deParaManuais = JSON.parse(JSON.stringify(cfg));
     renderDeParaTabela();
-    $("c_statusDePara").textContent = `${deParaLinhasOriginais.length} linhas do Drive.`;
+    const origemTxt = window.__smallResultsCache && !forcarBuscaNova ? " (da última leitura de '2 — Atualizar outras tabelas')" : " (busca nova no Drive)";
+    $("c_statusDePara").textContent = `${deParaLinhasOriginais.length} linhas${origemTxt}.`;
   } catch(err){
     console.error(err);
     $("c_statusDePara").textContent = "Erro ao buscar no Drive: " + err.message;
@@ -2379,7 +2391,7 @@ $("c_deparaSelect").addEventListener("change", () => {
   carregarDeParaDoDrive();
 });
 $("c_deparaSoGaps").addEventListener("change", renderDeParaTabela);
-$("c_btnCarregarDePara").addEventListener("click", carregarDeParaDoDrive);
+$("c_btnCarregarDePara").addEventListener("click", () => carregarDeParaDoDrive(true));
 
 $("c_btnSalvarDePara").addEventListener("click", async () => {
   $("c_statusDePara").textContent = "Salvando...";
@@ -2393,11 +2405,11 @@ $("c_btnSalvarDePara").addEventListener("click", async () => {
   }
 });
 
-/* carrega quando a config global já tiver chegado (ou assim que chegar) */
+/* sempre busca a config fresca ao abrir a tela — evita mostrar dado velho
+   se essa tela carregar antes da busca inicial (que roda em segundo plano
+   assim que a página abre) terminar */
 async function iniciar(){
-  if (!window.__config || !window.__config.colunas){
-    try{ await appsScriptFetchConfig(); } catch(e){ /* segue com vazio */ }
-  }
+  try{ await appsScriptFetchConfig(); } catch(e){ /* segue com o que já tinha em memória */ }
   carregarColunasNaTela();
   renderPicklistSelect();
   renderDeParaSelect();
