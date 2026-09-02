@@ -395,13 +395,19 @@
 
   <h3>Tabelas de/para (originais do CNES + colunas tratadas na mão)</h3>
   <div class="cfg-note" style="margin-bottom:8px">
-    As colunas cinzas vêm sempre frescas do arquivo do Drive (atualizam sozinhas em "2 — Atualizar outras tabelas" — essa tela reaproveita a mesma leitura, sem buscar de novo). As colunas roxas são as que a gente preenche na mão — ficam salvas aqui e sobrepõem o valor original quando existirem. Linhas com <span style="background:#fdeacb;padding:1px 6px;border-radius:4px">fundo laranja</span> têm alguma coluna manual vazia — são os "gaps" (código novo do CNES que ainda não classificamos).
+    As colunas cinzas vêm sempre frescas do arquivo do Drive (atualizam sozinhas em "2 — Atualizar outras tabelas"). As colunas roxas são as que a gente preenche na mão — ficam salvas e sobrepõem o valor original quando existirem. Linhas com <span style="background:#fdeacb;padding:1px 6px;border-radius:4px">fundo laranja</span> têm alguma coluna manual vazia — são os "gaps" (código novo do CNES que ainda não classificamos).
   </div>
+
+  <div style="background:#fff8e6;border:1px solid #f0d98c;border-radius:8px;padding:12px 16px;margin-bottom:16px">
+    <b style="font-size:13px">Configuração inicial (fazer uma vez só)</b>
+    <div class="cfg-note" style="margin:4px 0 8px">Traz de uma vez a classificação que vocês já tinham feito nos arquivos DP antigos, pras 9 tabelas que têm equivalente. Depois de salvo, nunca mais precisa repetir isso — o dia a dia continua sendo só os 3 botões da aba Início.</div>
+    <button id="c_btnImportarTudo" class="btn-primary">Importar tudo de uma vez e salvar</button>
+    <span id="c_statusImportarTudo" style="font-size:12px;color:#888;margin-left:8px"></span>
+  </div>
+
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
     <select id="c_deparaSelect"></select>
-    <button id="c_btnCarregarDePara" class="btn-secondary">Forçar nova busca no Drive (sem passar pelo botão 2)</button>
-    <button id="c_btnImportarLegado" class="btn-secondary">Importar classificação já feita (arquivo DP antigo)</button>
-    <button id="c_btnSalvarDePara" class="btn-primary">Salvar ajustes manuais</button>
+    <button id="c_btnSalvarDePara" class="btn-primary">Salvar ajustes desta tabela</button>
     <label style="font-size:12px;color:#555;display:flex;align-items:center;gap:5px">
       <input type="checkbox" id="c_deparaSoGaps"> mostrar só os gaps
     </label>
@@ -956,6 +962,9 @@ $("btnLoadAll").addEventListener("click", async () => {
   }
   setBotoesGlobaisDesabilitados(true);
   try{
+    setStatus("Lendo configuração salva (de/para, picklists)...");
+    try{ await appsScriptFetchConfig(); } catch(e){ console.warn("Config não atualizada, seguindo com o que já estava em memória:", e.message); }
+
     setStatus("Lendo tabelas pequenas (Apps Script)...");
     const smallResults = {};
     await Promise.all(SMALL_KEYS.map(async k => { smallResults[k] = await appsScriptFetchFile(k); }));
@@ -2410,37 +2419,39 @@ $("c_deparaSelect").addEventListener("change", () => {
   carregarDeParaDoDrive();
 });
 $("c_deparaSoGaps").addEventListener("change", renderDeParaTabela);
-$("c_btnCarregarDePara").addEventListener("click", () => carregarDeParaDoDrive(true));
-
-$("c_btnImportarLegado").addEventListener("click", async () => {
-  const tabela = deParaTabelaAtual;
-  const chaveLegado = DEPARA_LEGADO[tabela];
-  if (!chaveLegado){
-    $("c_statusDePara").textContent = "Essa tabela não tem um arquivo DP antigo pra importar.";
-    return;
-  }
-  const camposManuaisEsperados = DEPARA_CAMPOS_ESPERADOS[tabela] || [];
-  $("c_statusDePara").textContent = "Importando do arquivo DP antigo...";
-  try{
-    const linhasLegado = await appsScriptFetchFile(chaveLegado);
-    let importadas = 0;
-    linhasLegado.forEach(linha => {
-      const chave = chaveDePara(tabela, linha);
-      const valores = {};
-      camposManuaisEsperados.forEach(c => {
-        if (linha[c] !== undefined && linha[c] !== null && linha[c] !== "") valores[c] = linha[c];
+$("c_btnImportarTudo").addEventListener("click", async () => {
+  const status = $("c_statusImportarTudo");
+  const nomesTabelas = Object.keys(DEPARA_LEGADO);
+  let totalTabelas = 0, totalLinhas = 0;
+  for (const tabela of nomesTabelas){
+    const chaveLegado = DEPARA_LEGADO[tabela];
+    const camposManuaisEsperados = DEPARA_CAMPOS_ESPERADOS[tabela] || [];
+    status.textContent = `Importando ${tabela} (${totalTabelas + 1}/${nomesTabelas.length})...`;
+    try{
+      const linhasLegado = await appsScriptFetchFile(chaveLegado);
+      const dadosParaSalvar = {};
+      linhasLegado.forEach(linha => {
+        const chave = chaveDePara(tabela, linha);
+        const valores = {};
+        camposManuaisEsperados.forEach(c => {
+          if (linha[c] !== undefined && linha[c] !== null && linha[c] !== "") valores[c] = linha[c];
+        });
+        if (Object.keys(valores).length) dadosParaSalvar[chave] = valores;
       });
-      if (Object.keys(valores).length){
-        deParaManuais[chave] = { ...deParaManuais[chave], ...valores };
-        importadas++;
+      if (Object.keys(dadosParaSalvar).length){
+        await appsScriptSaveJSON({ action: "saveDePara", tabela, dados: dadosParaSalvar });
+        totalTabelas++;
+        totalLinhas += Object.keys(dadosParaSalvar).length;
       }
-    });
-    renderDeParaTabela();
-    $("c_statusDePara").textContent = `Importado do arquivo antigo: ${importadas} linhas. Revise e clique em "Salvar ajustes manuais" pra confirmar.`;
-  } catch(err){
-    console.error(err);
-    $("c_statusDePara").textContent = "Erro ao importar: " + err.message;
+    } catch(err){
+      console.error(`Erro importando ${tabela}:`, err);
+      status.textContent = `Erro em ${tabela}: ${err.message} — parei aqui, tente de novo depois.`;
+      return;
+    }
   }
+  await appsScriptFetchConfig();
+  if (deParaTabelaAtual) carregarDeParaDoDrive();
+  status.textContent = `Pronto — ${totalTabelas} tabelas importadas e salvas (${totalLinhas} linhas no total). Não precisa repetir isso.`;
 });
 
 $("c_btnSalvarDePara").addEventListener("click", async () => {
