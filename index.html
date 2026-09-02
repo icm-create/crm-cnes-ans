@@ -393,20 +393,22 @@
     </table>
   </div>
 
-  <h3>Tabelas de/para (regras fixas do CNES)</h3>
+  <h3>Tabelas de/para (originais do CNES + colunas tratadas na mão)</h3>
   <div class="cfg-note" style="margin-bottom:8px">
-    "Carregar da fonte atual" busca a tabela de verdade no Drive (via Apps Script) uma vez, só pra você revisar e salvar aqui — depois de salva, o app passa a usar esse dado configurado e não busca mais no Drive pra essa tabela, até você mandar carregar de novo.
+    As colunas cinzas vêm sempre frescas do arquivo do Drive (atualizam sozinhas em "2 — Atualizar outras tabelas"). As colunas roxas são as que a gente preenche na mão — ficam salvas aqui e sobrepõem o valor original quando existirem. Linhas com <span style="background:#fdeacb;padding:1px 6px;border-radius:4px">fundo laranja</span> têm alguma coluna manual vazia — são os "gaps" (código novo do CNES que ainda não classificamos).
   </div>
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
     <select id="c_deparaSelect"></select>
-    <button id="c_btnCarregarDePara" class="btn-secondary">Carregar da fonte atual (Drive)</button>
-    <button id="c_btnAddLinhaDePara" class="btn-secondary">+ Adicionar linha</button>
-    <button id="c_btnSalvarDePara" class="btn-primary">Salvar esta tabela</button>
+    <button id="c_btnCarregarDePara" class="btn-secondary">Atualizar do Drive agora</button>
+    <button id="c_btnSalvarDePara" class="btn-primary">Salvar ajustes manuais</button>
+    <label style="font-size:12px;color:#555;display:flex;align-items:center;gap:5px">
+      <input type="checkbox" id="c_deparaSoGaps"> mostrar só os gaps
+    </label>
     <span id="c_statusDePara" style="font-size:12px;color:#888"></span>
   </div>
-  <div class="table-wrap" style="max-height:40vh">
+  <div class="table-wrap" style="max-height:45vh">
     <table>
-      <thead><tr><th style="padding:6px 8px;text-align:left;width:160px">Chave (código)</th><th style="padding:6px 8px;text-align:left">Valores (JSON)</th><th></th></tr></thead>
+      <thead id="c_deparaHead"></thead>
       <tbody id="c_deparaBody"></tbody>
     </table>
   </div>
@@ -568,17 +570,76 @@ const DEPARA_KEY_FIELDS = {
   DPCBO: "CBO 2002",
   DPtbEquipamento: "CO_EQUIPAMENTO",
   DPMediaEquip: "equipamento",
-  DPtbGestaotbAtributo: "CO_GESTAO"
+  DPtbGestaotbAtributo: "CO_GESTAO",
+  DPtbSubTipo: "CO_SUB_TIPO",
+  TipoLeitos: "CO_ATRIBUTO"
 };
 
-/* Devolve as linhas a usar pra montar um lookup: as configuradas (se já
-   existirem) ou as recém-buscadas do Drive (reserva, nunca quebra). */
-function linhasDeParaOuFonte(nomeTabela, linhasBuscadas){
-  const cfg = window.__config.deparas && window.__config.deparas[nomeTabela];
-  if (cfg && Object.keys(cfg).length){
-    return Object.values(cfg);
+/* Tabelas cuja fonte "original" não é um arquivo próprio no Drive, e sim um
+   RECORTE (filtro) de outra tabela já buscada. Ex.: "Tipo Leitos" é o
+   tbAtributo filtrado pra CO_INDICADOR = 6 (o mesmo indicador que gerava a
+   antiga DBLeitos/DPTIPO DE LEITO). */
+const DEPARA_ORIGEM_ESPECIAL = {
+  TipoLeitos: { fonteChave: "tbAtributo", filtro: (r) => String(r.CO_INDICADOR) === "6" }
+};
+
+/* Campos que o CÓDIGO efetivamente usa de cada tabela de/para — os que a
+   gente preenche/ajusta na mão. Usado pra saber o que mostrar como "gap"
+   quando falta preencher pra um código novo. */
+const DEPARA_CAMPOS_ESPERADOS = {
+  DPtbTipoUnidade: ["Tipo de Estabelecimento", "Perfil da Conta_Provável"],
+  DPtbMunicipio: ["CO_SIGLA_ESTADO", "CIDADE", "REGIONAL"],
+  DPtbMotivoDesativacao: ["Motivo desativação 2", "Funcionamento Unidade"],
+  DPtbNaturezaJuridica: ["Natureza Jurídica (Grupo)", "Tipo de entidade"],
+  DPtbTipoEstabelecimento: ["CLASSIFICAÇÃO CRM"],
+  tbAtividade: ["DS_ATIVIDADE"],
+  DPtbAtendimentoPrestado: ["DS_ATENDIMENTO_PRESTADO"],
+  DPtbServicoEspecializado: ["Serviço"],
+  tbAtributo: ["DS_ATRIBUTO"],
+  DPtbInstalFisicaParaAssist: ["CRM_Instalaçoes Físicas para Assistência - Ambulatorial"],
+  DPCBO: ["TIPO PROFISSIONAL"],
+  DPtbEquipamento: ["TIPO EQUIPAMENTO CRM", "EQUIPAMENTO CRM"],
+  DPMediaEquip: ["média exames por equipamento"],
+  DPtbGestaotbAtributo: ["Nível de Atenção", "Atendimento"],
+  DPtbSubTipo: ["DS_SUB_TIPO"],
+  TipoLeitos: ["no_tp_leito"]
+};
+
+/* Devolve as linhas "originais" de uma tabela de/para — do próprio arquivo,
+   ou (se ela for um recorte de outra) filtrando a tabela-fonte. */
+async function buscarLinhasOriginais(nomeTabela){
+  const especial = DEPARA_ORIGEM_ESPECIAL[nomeTabela];
+  if (especial){
+    const fonte = await appsScriptFetchFile(especial.fonteChave);
+    return fonte.filter(especial.filtro);
   }
-  return linhasBuscadas || [];
+  return await appsScriptFetchFile(nomeTabela);
+}
+
+/* Algumas tabelas usam chave composta (mais de uma coluna), ex.: DPtbSubTipo
+   (o subtipo só é único combinando Tipo de Unidade + Subtipo). */
+const DEPARA_CHAVE_COMPOSTA = {
+  DPtbSubTipo: ["CO_TIPO_UNIDADE", "CO_SUB_TIPO"]
+};
+
+function chaveDePara(nomeTabela, row){
+  const composta = DEPARA_CHAVE_COMPOSTA[nomeTabela];
+  if (composta) return composta.map(c => row[c]).join("::");
+  return String(row[DEPARA_KEY_FIELDS[nomeTabela]]);
+}
+
+/* Mescla o que veio fresco do Drive (colunas "originais") com os ajustes
+   manuais salvos (colunas "tratadas") — o manual só SOBRESCREVE quando
+   existe; senão o valor original passa direto. Nunca "congela" a tabela
+   inteira, então código novo do CNES sempre aparece (só sem o manual
+   preenchido ainda, que vira gap visível na tela de Configurações). */
+function linhasDeParaMescladas(nomeTabela, linhasBuscadas){
+  const cfg = (window.__config.deparas && window.__config.deparas[nomeTabela]) || {};
+  return (linhasBuscadas || []).map(r => {
+    const chave = chaveDePara(nomeTabela, r);
+    const manual = cfg[chave];
+    return manual ? { ...r, ...manual } : r;
+  });
 }
 
 const SMALL_KEYS = ["DPtbTipoUnidade","DPtbMunicipio","DPtbMotivoDesativacao","DPtbNaturezaJuridica",
@@ -877,33 +938,28 @@ $("btnLoadAll").addEventListener("click", async () => {
   setBotoesGlobaisDesabilitados(true);
   try{
     setStatus("Lendo tabelas pequenas (Apps Script)...");
-    const chavesParaBuscar = SMALL_KEYS.filter(k => {
-      if (k === "TODAS_AS_CONTAS_ATIVAS_CNES") return true;
-      const cfg = window.__config.deparas && window.__config.deparas[k];
-      return !(cfg && Object.keys(cfg).length); // já configurado -> não precisa buscar no Drive
-    });
     const smallResults = {};
-    await Promise.all(chavesParaBuscar.map(async k => { smallResults[k] = await appsScriptFetchFile(k); }));
+    await Promise.all(SMALL_KEYS.map(async k => { smallResults[k] = await appsScriptFetchFile(k); }));
 
     const lk = {
-      tipoUnidade: mapBy(linhasDeParaOuFonte("DPtbTipoUnidade", smallResults.DPtbTipoUnidade), "CO_TIPO_UNIDADE"),
-      municipio: mapBy(linhasDeParaOuFonte("DPtbMunicipio", smallResults.DPtbMunicipio), "CO_MUNICIPIO"),
-      motivoDesab: mapBy(linhasDeParaOuFonte("DPtbMotivoDesativacao", smallResults.DPtbMotivoDesativacao), "CD_MOTIVO_DESAB"),
-      naturezaJur: mapBy(linhasDeParaOuFonte("DPtbNaturezaJuridica", smallResults.DPtbNaturezaJuridica), "CO_NATUREZA_JUR"),
-      tipoEstab: mapBy(linhasDeParaOuFonte("DPtbTipoEstabelecimento", smallResults.DPtbTipoEstabelecimento), "CO_TIPO_ESTABELECIMENTO"),
-      atividade: mapBy(linhasDeParaOuFonte("tbAtividade", smallResults.tbAtividade), "CO_ATIVIDADE"),
-      atendPrestado: mapBy(linhasDeParaOuFonte("DPtbAtendimentoPrestado", smallResults.DPtbAtendimentoPrestado), "CO_ATENDIMENTO_PRESTADO"),
-      servEspecializado: mapBy(linhasDeParaOuFonte("DPtbServicoEspecializado", smallResults.DPtbServicoEspecializado), "CO_SERVICO_ESPECIALIZADO"),
+      tipoUnidade: mapBy(linhasDeParaMescladas("DPtbTipoUnidade", smallResults.DPtbTipoUnidade), "CO_TIPO_UNIDADE"),
+      municipio: mapBy(linhasDeParaMescladas("DPtbMunicipio", smallResults.DPtbMunicipio), "CO_MUNICIPIO"),
+      motivoDesab: mapBy(linhasDeParaMescladas("DPtbMotivoDesativacao", smallResults.DPtbMotivoDesativacao), "CD_MOTIVO_DESAB"),
+      naturezaJur: mapBy(linhasDeParaMescladas("DPtbNaturezaJuridica", smallResults.DPtbNaturezaJuridica), "CO_NATUREZA_JUR"),
+      tipoEstab: mapBy(linhasDeParaMescladas("DPtbTipoEstabelecimento", smallResults.DPtbTipoEstabelecimento), "CO_TIPO_ESTABELECIMENTO"),
+      atividade: mapBy(linhasDeParaMescladas("tbAtividade", smallResults.tbAtividade), "CO_ATIVIDADE"),
+      atendPrestado: mapBy(linhasDeParaMescladas("DPtbAtendimentoPrestado", smallResults.DPtbAtendimentoPrestado), "CO_ATENDIMENTO_PRESTADO"),
+      servEspecializado: mapBy(linhasDeParaMescladas("DPtbServicoEspecializado", smallResults.DPtbServicoEspecializado), "CO_SERVICO_ESPECIALIZADO"),
       atributo: new Map(
-        linhasDeParaOuFonte("tbAtributo", smallResults.tbAtributo)
+        linhasDeParaMescladas("tbAtributo", smallResults.tbAtributo)
           .filter(r => String(r.CO_INDICADOR) === "4")
           .map(r => [keyOf(r.CO_ATRIBUTO), caracteristicaLabel(r.DS_ATRIBUTO)])
       ),
-      instalFisica: mapBy(linhasDeParaOuFonte("DPtbInstalFisicaParaAssist", smallResults.DPtbInstalFisicaParaAssist), "CO_INSTALACAO"),
-      cbo: new Map(linhasDeParaOuFonte("DPCBO", smallResults.DPCBO).map(r => [keyOf(stripCboLetters(r["CBO 2002"])), r["TIPO PROFISSIONAL"]])),
-      equipamento: mapBy(linhasDeParaOuFonte("DPtbEquipamento", smallResults.DPtbEquipamento), "CO_EQUIPAMENTO"),
-      mediaEquip: new Map(linhasDeParaOuFonte("DPMediaEquip", smallResults.DPMediaEquip).map(r => [r.equipamento, r["média exames por equipamento"]])),
-      gestaoAtributo: mapBy(linhasDeParaOuFonte("DPtbGestaotbAtributo", smallResults.DPtbGestaotbAtributo), "CO_GESTAO")
+      instalFisica: mapBy(linhasDeParaMescladas("DPtbInstalFisicaParaAssist", smallResults.DPtbInstalFisicaParaAssist), "CO_INSTALACAO"),
+      cbo: new Map(linhasDeParaMescladas("DPCBO", smallResults.DPCBO).map(r => [keyOf(stripCboLetters(r["CBO 2002"])), r["TIPO PROFISSIONAL"]])),
+      equipamento: mapBy(linhasDeParaMescladas("DPtbEquipamento", smallResults.DPtbEquipamento), "CO_EQUIPAMENTO"),
+      mediaEquip: new Map(linhasDeParaMescladas("DPMediaEquip", smallResults.DPMediaEquip).map(r => [r.equipamento, r["média exames por equipamento"]])),
+      gestaoAtributo: mapBy(linhasDeParaMescladas("DPtbGestaotbAtributo", smallResults.DPtbGestaotbAtributo), "CO_GESTAO")
     };
 
     const crmRowsIniciais = (smallResults.TODAS_AS_CONTAS_ATIVAS_CNES || []).map(r => ({ ...r, CNES: r.CNES != null ? String(r.CNES).trim() : "" }));
@@ -2216,7 +2272,8 @@ $("c_btnSalvarPicklists").addEventListener("click", async () => {
 });
 
 /* ---------------------------- Tabelas de/para ---------------------------- */
-let deParaAtual = {}; // { chave: {campo:valor,...} } da tabela selecionada, em edição
+let deParaLinhasOriginais = []; // linhas cruas buscadas do Drive (colunas originais)
+let deParaManuais = {};         // { chave: {campoManual: valor,...} } — cópia editável dos ajustes salvos
 let deParaTabelaAtual = null;
 
 function renderDeParaSelect(){
@@ -2225,94 +2282,111 @@ function renderDeParaSelect(){
   sel.innerHTML = nomes.map(n => `<option value="${n}">${n}</option>`).join("");
   deParaTabelaAtual = nomes.includes(deParaTabelaAtual) ? deParaTabelaAtual : nomes[0];
   sel.value = deParaTabelaAtual;
-  carregarDeParaConfigurada();
+  carregarDeParaDoDrive();
 }
 
-function carregarDeParaConfigurada(){
-  const cfg = (window.__config.deparas && window.__config.deparas[deParaTabelaAtual]) || {};
-  deParaAtual = JSON.parse(JSON.stringify(cfg)); // cópia editável
-  renderDeParaTabela();
-}
-
-function renderDeParaTabela(){
-  const tbody = $("c_deparaBody");
-  tbody.innerHTML = "";
-  Object.keys(deParaAtual).forEach(chave => {
-    const tr = document.createElement("tr");
-
-    const tdChave = document.createElement("td");
-    const inpChave = document.createElement("input");
-    inpChave.type = "text"; inpChave.value = chave; inpChave.style.cssText = "width:140px;font-size:12px;padding:3px 5px";
-    inpChave.addEventListener("change", () => {
-      if (inpChave.value && inpChave.value !== chave){
-        deParaAtual[inpChave.value] = deParaAtual[chave];
-        delete deParaAtual[chave];
-        renderDeParaTabela();
-      }
-    });
-    tdChave.appendChild(inpChave); tr.appendChild(tdChave);
-
-    const tdValores = document.createElement("td");
-    const inpValores = document.createElement("input");
-    inpValores.type = "text";
-    inpValores.value = JSON.stringify(deParaAtual[chave]);
-    inpValores.style.cssText = "width:100%;font-size:12px;padding:3px 5px;font-family:monospace";
-    inpValores.addEventListener("change", () => {
-      try{ deParaAtual[chave] = JSON.parse(inpValores.value); }
-      catch(e){ $("c_statusDePara").textContent = `JSON inválido na chave "${chave}" — não alterado.`; inpValores.value = JSON.stringify(deParaAtual[chave]); }
-    });
-    tdValores.appendChild(inpValores); tr.appendChild(tdValores);
-
-    const tdDel = document.createElement("td");
-    const btnDel = document.createElement("button");
-    btnDel.className = "btn-secondary-sm"; btnDel.textContent = "Remover";
-    btnDel.addEventListener("click", () => { delete deParaAtual[chave]; renderDeParaTabela(); });
-    tdDel.appendChild(btnDel); tr.appendChild(tdDel);
-
-    tbody.appendChild(tr);
-  });
-}
-
-$("c_deparaSelect").addEventListener("change", () => {
-  deParaTabelaAtual = $("c_deparaSelect").value;
-  carregarDeParaConfigurada();
-});
-
-$("c_btnCarregarDePara").addEventListener("click", async () => {
+async function carregarDeParaDoDrive(){
   const tabela = deParaTabelaAtual;
-  const chaveField = DEPARA_KEY_FIELDS[tabela];
   $("c_statusDePara").textContent = "Buscando no Drive...";
   try{
-    const linhas = await appsScriptFetchFile(tabela);
-    const novo = {};
-    linhas.forEach(r => {
-      const chave = r[chaveField];
-      if (chave === null || chave === undefined || chave === "") return;
-      novo[String(chave)] = r;
-    });
-    deParaAtual = novo;
+    deParaLinhasOriginais = await buscarLinhasOriginais(tabela);
+    const cfg = (window.__config.deparas && window.__config.deparas[tabela]) || {};
+    deParaManuais = JSON.parse(JSON.stringify(cfg));
     renderDeParaTabela();
-    $("c_statusDePara").textContent = `Carregado do Drive (${Object.keys(novo).length} linhas) — revise e clique em Salvar.`;
+    $("c_statusDePara").textContent = `${deParaLinhasOriginais.length} linhas do Drive.`;
   } catch(err){
     console.error(err);
     $("c_statusDePara").textContent = "Erro ao buscar no Drive: " + err.message;
   }
-});
+}
 
-$("c_btnAddLinhaDePara").addEventListener("click", () => {
-  let novaChave = "nova-chave";
-  let i = 1;
-  while (deParaAtual[novaChave] !== undefined){ novaChave = `nova-chave-${i++}`; }
-  deParaAtual[novaChave] = { [DEPARA_KEY_FIELDS[deParaTabelaAtual]]: novaChave };
-  renderDeParaTabela();
+function renderDeParaTabela(){
+  const camposManuaisEsperados = DEPARA_CAMPOS_ESPERADOS[deParaTabelaAtual] || [];
+  const soGaps = $("c_deparaSoGaps").checked;
+
+  // colunas originais = todas as colunas da linha crua, exceto as que são manuais esperadas
+  const colunasOriginais = deParaLinhasOriginais.length
+    ? Object.keys(deParaLinhasOriginais[0]).filter(c => !camposManuaisEsperados.includes(c))
+    : [];
+
+  const thead = $("c_deparaHead");
+  thead.innerHTML = "";
+  const trh = document.createElement("tr");
+  colunasOriginais.forEach(c => {
+    const th = document.createElement("th");
+    th.style.cssText = "padding:6px 8px;text-align:left;background:#eee";
+    th.textContent = c;
+    trh.appendChild(th);
+  });
+  camposManuaisEsperados.forEach(c => {
+    const th = document.createElement("th");
+    th.style.cssText = "padding:6px 8px;text-align:left;background:var(--final-bg);color:var(--final-fg)";
+    th.textContent = c + " (manual)";
+    trh.appendChild(th);
+  });
+  thead.appendChild(trh);
+
+  const tbody = $("c_deparaBody");
+  tbody.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  let gaps = 0;
+
+  deParaLinhasOriginais.forEach(linhaOriginal => {
+    const chave = chaveDePara(deParaTabelaAtual, linhaOriginal);
+    const manual = deParaManuais[chave] || {};
+    const temGap = camposManuaisEsperados.some(c => manual[c] === undefined || manual[c] === null || manual[c] === "");
+    if (temGap) gaps++;
+    if (soGaps && !temGap) return;
+
+    const tr = document.createElement("tr");
+    if (temGap) tr.style.background = "#fdeacb";
+
+    colunasOriginais.forEach(c => {
+      const td = document.createElement("td");
+      td.style.padding = "4px 8px";
+      td.textContent = linhaOriginal[c] ?? "";
+      tr.appendChild(td);
+    });
+
+    camposManuaisEsperados.forEach(c => {
+      const td = document.createElement("td");
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.value = manual[c] ?? "";
+      inp.placeholder = "(vazio — gap)";
+      inp.style.cssText = "width:160px;font-size:12px;padding:3px 5px;border:1px solid #ccc;border-radius:4px";
+      inp.addEventListener("change", () => {
+        if (!deParaManuais[chave]) deParaManuais[chave] = {};
+        if (inp.value === ""){ delete deParaManuais[chave][c]; }
+        else { deParaManuais[chave][c] = inp.value; }
+        if (Object.keys(deParaManuais[chave]).length === 0) delete deParaManuais[chave];
+        renderDeParaTabela();
+      });
+      td.appendChild(inp);
+      tr.appendChild(td);
+    });
+
+    frag.appendChild(tr);
+  });
+  tbody.appendChild(frag);
+
+  const nomeGaps = gaps === 0 ? "nenhum gap" : `${gaps} linha(s) com gap`;
+  $("c_statusDePara").textContent = `${deParaLinhasOriginais.length} linhas do Drive — ${nomeGaps}.`;
+}
+
+$("c_deparaSelect").addEventListener("change", () => {
+  deParaTabelaAtual = $("c_deparaSelect").value;
+  carregarDeParaDoDrive();
 });
+$("c_deparaSoGaps").addEventListener("change", renderDeParaTabela);
+$("c_btnCarregarDePara").addEventListener("click", carregarDeParaDoDrive);
 
 $("c_btnSalvarDePara").addEventListener("click", async () => {
   $("c_statusDePara").textContent = "Salvando...";
   try{
-    await appsScriptSaveJSON({ action: "saveDePara", tabela: deParaTabelaAtual, dados: deParaAtual });
+    await appsScriptSaveJSON({ action: "saveDePara", tabela: deParaTabelaAtual, dados: deParaManuais });
     await appsScriptFetchConfig();
-    $("c_statusDePara").textContent = "Salvo — a próxima 'Atualizar outras tabelas' já usa essa configuração em vez de buscar no Drive.";
+    $("c_statusDePara").textContent = "Ajustes manuais salvos — já valem na próxima atualização.";
   } catch(err){
     console.error(err);
     $("c_statusDePara").textContent = "Erro ao salvar: " + err.message;
