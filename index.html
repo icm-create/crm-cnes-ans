@@ -400,6 +400,7 @@
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
     <select id="c_deparaSelect"></select>
     <button id="c_btnCarregarDePara" class="btn-secondary">Forçar nova busca no Drive (sem passar pelo botão 2)</button>
+    <button id="c_btnImportarLegado" class="btn-secondary">Importar classificação já feita (arquivo DP antigo)</button>
     <button id="c_btnSalvarDePara" class="btn-primary">Salvar ajustes manuais</button>
     <label style="font-size:12px;color:#555;display:flex;align-items:center;gap:5px">
       <input type="checkbox" id="c_deparaSoGaps"> mostrar só os gaps
@@ -583,6 +584,21 @@ const DEPARA_KEY_FIELDS = {
    antiga DBLeitos/DPTIPO DE LEITO). */
 const DEPARA_ORIGEM_ESPECIAL = {
   TipoLeitos: { fonteChave: "tbAtributo", filtro: (r) => String(r.CO_INDICADOR) === "6" }
+};
+
+/* Tabelas que têm um arquivo DP... antigo (já classificado por vocês) — usado
+   só pra IMPORTAR de uma vez a classificação manual que já existia, pro
+   sistema novo. Depois de importado e salvo, esse arquivo não é mais lido. */
+const DEPARA_LEGADO = {
+  DPtbTipoUnidade: "LEGADO_DPtbTipoUnidade",
+  DPtbMunicipio: "LEGADO_DPtbMunicipio",
+  DPtbMotivoDesativacao: "LEGADO_DPtbMotivoDesativacao",
+  DPtbNaturezaJuridica: "LEGADO_DPtbNaturezaJuridica",
+  DPtbTipoEstabelecimento: "LEGADO_DPtbTipoEstabelecimento",
+  DPtbAtendimentoPrestado: "LEGADO_DPtbAtendimentoPrestado",
+  DPtbServicoEspecializado: "LEGADO_DPtbServicoEspecializado",
+  DPtbInstalFisicaParaAssist: "LEGADO_DPtbInstalFisicaParaAssist",
+  DPtbEquipamento: "LEGADO_DPtbEquipamento"
 };
 
 /* Campos que o CÓDIGO efetivamente usa de cada tabela de/para — os que a
@@ -2346,7 +2362,10 @@ function renderDeParaTabela(){
   deParaLinhasOriginais.forEach(linhaOriginal => {
     const chave = chaveDePara(deParaTabelaAtual, linhaOriginal);
     const manual = deParaManuais[chave] || {};
-    const temGap = camposManuaisEsperados.some(c => manual[c] === undefined || manual[c] === null || manual[c] === "");
+    // valor efetivo = ajuste manual salvo, ou (se não tiver) o que já vier na própria
+    // linha buscada (ex.: DPCBO já vem com "TIPO PROFISSIONAL" preenchido de fábrica)
+    const valorEfetivo = (c) => manual[c] ?? linhaOriginal[c] ?? "";
+    const temGap = camposManuaisEsperados.some(c => valorEfetivo(c) === "");
     if (temGap) gaps++;
     if (soGaps && !temGap) return;
 
@@ -2364,7 +2383,7 @@ function renderDeParaTabela(){
       const td = document.createElement("td");
       const inp = document.createElement("input");
       inp.type = "text";
-      inp.value = manual[c] ?? "";
+      inp.value = valorEfetivo(c);
       inp.placeholder = "(vazio — gap)";
       inp.style.cssText = "width:160px;font-size:12px;padding:3px 5px;border:1px solid #ccc;border-radius:4px";
       inp.addEventListener("change", () => {
@@ -2392,6 +2411,37 @@ $("c_deparaSelect").addEventListener("change", () => {
 });
 $("c_deparaSoGaps").addEventListener("change", renderDeParaTabela);
 $("c_btnCarregarDePara").addEventListener("click", () => carregarDeParaDoDrive(true));
+
+$("c_btnImportarLegado").addEventListener("click", async () => {
+  const tabela = deParaTabelaAtual;
+  const chaveLegado = DEPARA_LEGADO[tabela];
+  if (!chaveLegado){
+    $("c_statusDePara").textContent = "Essa tabela não tem um arquivo DP antigo pra importar.";
+    return;
+  }
+  const camposManuaisEsperados = DEPARA_CAMPOS_ESPERADOS[tabela] || [];
+  $("c_statusDePara").textContent = "Importando do arquivo DP antigo...";
+  try{
+    const linhasLegado = await appsScriptFetchFile(chaveLegado);
+    let importadas = 0;
+    linhasLegado.forEach(linha => {
+      const chave = chaveDePara(tabela, linha);
+      const valores = {};
+      camposManuaisEsperados.forEach(c => {
+        if (linha[c] !== undefined && linha[c] !== null && linha[c] !== "") valores[c] = linha[c];
+      });
+      if (Object.keys(valores).length){
+        deParaManuais[chave] = { ...deParaManuais[chave], ...valores };
+        importadas++;
+      }
+    });
+    renderDeParaTabela();
+    $("c_statusDePara").textContent = `Importado do arquivo antigo: ${importadas} linhas. Revise e clique em "Salvar ajustes manuais" pra confirmar.`;
+  } catch(err){
+    console.error(err);
+    $("c_statusDePara").textContent = "Erro ao importar: " + err.message;
+  }
+});
 
 $("c_btnSalvarDePara").addEventListener("click", async () => {
   $("c_statusDePara").textContent = "Salvando...";
