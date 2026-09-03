@@ -536,18 +536,28 @@ async function loadLargeCsv(chave){
 /* =========================================================================
    Tabelas pequenas — via Apps Script (Web App), sem login
    ========================================================================= */
-async function appsScriptFetchFile(chave){
+async function appsScriptFetchFile(chave, tentativa){
+  tentativa = tentativa || 1;
   const url = `${CONFIG.APPS_SCRIPT_URL}?action=file&chave=${encodeURIComponent(chave)}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Falha ao buscar "${chave}" no Apps Script: ${res.status}`);
-  const data = await res.json();
-  if (data.erro) throw new Error(`Apps Script retornou erro para "${chave}": ${data.erro}`);
-  const binaryStr = atob(data.base64);
-  const bytes = new Uint8Array(binaryStr.length);
-  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-  const wb = XLSX.read(bytes.buffer, { type: "array" });
-  const sheetName = wb.SheetNames[0];
-  return XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: null });
+  try{
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Falha ao buscar "${chave}" no Apps Script: ${res.status}`);
+    const data = await res.json();
+    if (data.erro) throw new Error(`Apps Script retornou erro para "${chave}": ${data.erro}`);
+    const binaryStr = atob(data.base64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    const wb = XLSX.read(bytes.buffer, { type: "array" });
+    const sheetName = wb.SheetNames[0];
+    return XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: null });
+  } catch(err){
+    // rede instável (ex.: "Failed to fetch") — tenta mais 2 vezes antes de desistir
+    if (tentativa < 3 && /fetch/i.test(err.message)){
+      await new Promise(r => setTimeout(r, 800 * tentativa));
+      return appsScriptFetchFile(chave, tentativa + 1);
+    }
+    throw err;
+  }
 }
 
 /* =========================================================================
@@ -639,8 +649,8 @@ const DEPARA_CAMPOS_ESPERADOS = {
   DPtbMotivoDesativacao: ["Motivo desativação 2", "Funcionamento Unidade"],
   DPtbNaturezaJuridica: ["Natureza Jurídica (Grupo)", "Tipo de entidade"],
   DPtbTipoEstabelecimento: ["CLASSIFICAÇÃO CRM"],
-  tbAtividade: ["DS_ATIVIDADE"],
-  DPtbAtendimentoPrestado: ["DS_ATENDIMENTO_PRESTADO"],
+  tbAtividade: [], // DS_ATIVIDADE é original do CNES, não manual — corrigido
+  DPtbAtendimentoPrestado: ["Atendimento Prestado"], // era ["DS_ATENDIMENTO_PRESTADO"] por engano — essa é original do CNES; a manual de verdade é esta
   DPtbServicoEspecializado: ["Serviço"],
   tbAtributo: ["DS_ATRIBUTO"],
   DPtbInstalFisicaParaAssist: ["CRM_Instalaçoes Físicas para Assistência - Ambulatorial"],
@@ -650,6 +660,19 @@ const DEPARA_CAMPOS_ESPERADOS = {
   DPtbGestaotbAtributo: ["Nível de Atenção", "Atendimento"],
   DPtbSubTipo: ["DS_SUB_TIPO"],
   TipoLeitos: ["no_tp_leito"]
+};
+
+/* Colunas originais que a gente NÃO quer ver na tela (lixo/irrelevante),
+   mesmo vindo no arquivo bruto. */
+const DEPARA_COLUNAS_OCULTAS = {
+  DPtbTipoEstabelecimento: ["DS_CONCEITO_TIPO"],
+  tbAtividade: ["TP_CLASSIFICACAO_PROFISSIONAL", "TP_CBO_SAUDE", "ST_CBO_REGULAMENTADO", "NO_ANO_CMPT"]
+};
+
+/* Quando preenchida, é uma lista FECHADA das únicas colunas originais que
+   devem aparecer (em vez de "todas menos as ocultas"). */
+const DEPARA_COLUNAS_ORIGINAIS_PERMITIDAS = {
+  DPtbMunicipio: ["CO_MUNICIPIO", "NO_MUNICIPIO"]
 };
 
 /* Devolve as linhas "originais" de uma tabela de/para — reaproveitando o
@@ -827,7 +850,7 @@ function buildAtendPrestConv(rows, lk){
   const byUnidadeConv = new Map();
   rows.forEach(r => {
     const cu = r.CO_UNIDADE;
-    const atendLabel = (lk.atendPrestado.get(keyOf(r.CO_ATENDIMENTO_PRESTADO)) || {}).DS_ATENDIMENTO_PRESTADO;
+    const atendLabel = (lk.atendPrestado.get(keyOf(r.CO_ATENDIMENTO_PRESTADO)) || {})["Atendimento Prestado"];
     if (atendLabel){
       if (!byUnidadeAtend.has(cu)) byUnidadeAtend.set(cu, new Set());
       byUnidadeAtend.get(cu).add(atendLabel);
@@ -2362,11 +2385,14 @@ async function carregarDeParaDoDrive(forcarBuscaNova){
 
 function renderDeParaTabela(){
   const camposManuaisEsperados = DEPARA_CAMPOS_ESPERADOS[deParaTabelaAtual] || [];
+  const ocultas = DEPARA_COLUNAS_OCULTAS[deParaTabelaAtual] || [];
+  const permitidas = DEPARA_COLUNAS_ORIGINAIS_PERMITIDAS[deParaTabelaAtual];
   const soGaps = $("c_deparaSoGaps").checked;
 
-  // colunas originais = todas as colunas da linha crua, exceto as que são manuais esperadas
+  // colunas originais = todas as colunas da linha crua, exceto manuais/ocultas —
+  // ou, se houver uma lista fechada definida, só essas.
   const colunasOriginais = deParaLinhasOriginais.length
-    ? Object.keys(deParaLinhasOriginais[0]).filter(c => !camposManuaisEsperados.includes(c))
+    ? (permitidas || Object.keys(deParaLinhasOriginais[0]).filter(c => !camposManuaisEsperados.includes(c) && !ocultas.includes(c)))
     : [];
 
   const thead = $("c_deparaHead");
@@ -2446,10 +2472,12 @@ $("c_btnImportarTudo").addEventListener("click", async () => {
   const status = $("c_statusImportarTudo");
   const nomesTabelas = Object.keys(DEPARA_LEGADO);
   let totalTabelas = 0, totalLinhas = 0;
-  for (const tabela of nomesTabelas){
+  const falhas = [];
+  for (let i = 0; i < nomesTabelas.length; i++){
+    const tabela = nomesTabelas[i];
     const chaveLegado = DEPARA_LEGADO[tabela];
     const camposManuaisEsperados = DEPARA_CAMPOS_ESPERADOS[tabela] || [];
-    status.textContent = `Importando ${tabela} (${totalTabelas + 1}/${nomesTabelas.length})...`;
+    status.textContent = `Importando ${tabela} (${i + 1}/${nomesTabelas.length})...`;
     try{
       const linhasLegado = await appsScriptFetchFile(chaveLegado);
       const dadosParaSalvar = {};
@@ -2468,13 +2496,14 @@ $("c_btnImportarTudo").addEventListener("click", async () => {
       }
     } catch(err){
       console.error(`Erro importando ${tabela}:`, err);
-      status.textContent = `Erro em ${tabela}: ${err.message} — parei aqui, tente de novo depois.`;
-      return;
+      falhas.push(tabela);
+      // não para o lote — segue pras próximas tabelas
     }
   }
   await appsScriptFetchConfig();
   if (deParaTabelaAtual) carregarDeParaDoDrive();
-  status.textContent = `Pronto — ${totalTabelas} tabelas importadas e salvas (${totalLinhas} linhas no total). Não precisa repetir isso.`;
+  const resumoFalhas = falhas.length ? ` Falharam (tente de novo, uma de cada vez, no seletor abaixo): ${falhas.join(", ")}.` : "";
+  status.textContent = `${totalTabelas} de ${nomesTabelas.length} tabelas importadas e salvas (${totalLinhas} linhas no total).${resumoFalhas}`;
 });
 
 $("c_btnSalvarDePara").addEventListener("click", async () => {
