@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>CNES-CRM</title>
+<title>Atualização Base CNES/ANS - CRM</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -134,24 +134,44 @@
   .empty-state{padding:60px 20px;text-align:center;color:#777}
   .cfg-note{font-size:11px;color:#888;line-height:1.5}
 
+  /* ---- layout com menu lateral ---- */
+  .app-shell{display:flex;min-height:100vh}
+  .app-sidenav{width:230px;flex:0 0 230px;background:#0c1c2c;display:flex;flex-direction:column;padding:10px 0}
+  .app-sidenav .grupo{padding:10px 16px 4px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-top:6px}
+  .app-sidenav button{display:block;width:100%;text-align:left;background:transparent;border:none;border-left:3px solid transparent;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;color:rgba(255,255,255,.85)}
+  .app-sidenav button.active{border-left-color:#fff;background:rgba(255,255,255,.12);color:#fff}
+  .app-sidenav button.grupo-inicio{background:rgba(45,108,223,.28)}
+  .app-sidenav button.grupo-inicio.active{background:rgba(45,108,223,.55)}
+  .app-sidenav button.grupo-crm{background:rgba(45,108,223,.12)}
+  .app-sidenav button.grupo-crm.active{background:rgba(45,108,223,.32)}
+  .app-sidenav button.grupo-config{background:rgba(230,126,34,.18)}
+  .app-sidenav button.grupo-config.active{background:rgba(230,126,34,.4)}
+  .app-content{flex:1;min-width:0}
+
 </style>
 </head>
 <body>
 
-<nav class="app-nav">
-  <button id="navInicio" class="active">Início</button>
-  <button id="navLocalizar">Localizar CNES de Contas CRM</button>
-  <button id="navAtualizar">Atualizar Contas CRM</button>
-  <button id="navIncluir">Incluir Novas Contas CRM</button>
-  <button id="navConfiguracoes">Configurações</button>
+<div class="app-shell">
+<nav class="app-sidenav">
+  <div class="grupo">Geral</div>
+  <button id="navInicio" class="active grupo-inicio">Início</button>
+  <div class="grupo">CRM × CNES</div>
+  <button id="navLocalizar" class="grupo-crm">Localizar CNES de Contas CRM</button>
+  <button id="navAtualizar" class="grupo-crm">Atualizar Contas CRM</button>
+  <button id="navIncluir" class="grupo-crm">Incluir Novas Contas CRM</button>
+  <div class="grupo">Sistema</div>
+  <button id="navConfiguracoes" class="grupo-config">Configurações</button>
 </nav>
 
+<div class="app-content">
 <header>
   <div>
-    <h1>CNES × CRM</h1>
+    <h1>ATUALIZAÇÃO BASE DE DADOS CNES E ANS - CRM</h1>
     <div class="status" id="statusLine">Pronto — sem login necessário</div>
   </div>
 </header>
+
 
 <div id="view-inicio" class="view active">
   <div class="main" style="max-width:900px">
@@ -421,6 +441,9 @@
   </div>
 </div>
 
+</div>
+
+</div>
 </div>
 
 <script>
