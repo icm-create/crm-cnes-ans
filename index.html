@@ -160,6 +160,7 @@
   <button id="navLocalizar" class="grupo-crm">Localizar CNES de Contas CRM</button>
   <button id="navAtualizar" class="grupo-crm">Atualizar Contas CRM</button>
   <button id="navIncluir" class="grupo-crm">Incluir Novas Contas CRM</button>
+  <button id="navDesconsiderados" class="grupo-crm">Contas Desconsideradas</button>
   <div class="grupo">Sistema</div>
   <button id="navConfiguracoes" class="grupo-config">Configurações</button>
 </nav>
@@ -357,6 +358,30 @@
   </main>
 </div>
 
+</div>
+
+<div id="view-desconsiderados" class="view">
+  <div class="view-subheader">
+    <div class="summary" id="d_summary" style="display:none">
+      <div class="card"><b id="d_sumTotal">0</b>contas desconsideradas</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="text" id="d_fBusca" placeholder="buscar (Conta_ID, CNES...)" style="padding:6px 8px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:220px">
+      <button id="d_btnAtualizar" class="btn-secondary">Atualizar lista</button>
+      <button id="d_btnExportXlsx" class="btn-green-outline">Exportar (.xlsx)</button>
+      <button id="d_btnExportCsv" class="btn-green-outline">Exportar (.csv)</button>
+    </div>
+  </div>
+  <div class="cfg-note" style="padding:0 20px 8px">Contas do CRM que você marcou "Desconsiderar" na tela Localizar CNES de Contas CRM — por isso elas não voltam mais como sugestão. Essa lista só de consulta/exportação; pra tirar uma conta daqui, é preciso editar direto na planilha de respostas do Formulário (avise se quiser um botão de "remover" aqui também).</div>
+  <div class="main">
+    <div class="table-wrap">
+      <div class="empty-state" id="d_emptyState">Carregando...</div>
+      <table id="d_mainTable" style="display:none">
+        <thead><tr><th style="padding:8px 10px;text-align:left">Conta_ID</th><th style="padding:8px 10px;text-align:left">CNES</th><th style="padding:8px 10px;text-align:left">Data</th><th style="padding:8px 10px;text-align:left">Origem</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <div id="view-configuracoes" class="view">
@@ -1161,7 +1186,7 @@ appsScriptFetchConfig().catch(err => console.warn("Não foi possível carregar c
 /* =========================================================================
    Navegação entre telas
    ========================================================================= */
-const VIEWS = ["inicio","localizar","atualizar","incluir","configuracoes"];
+const VIEWS = ["inicio","localizar","atualizar","incluir","desconsiderados","configuracoes"];
 function mostrarView(nome){
   VIEWS.forEach(v => {
     $("view-" + v).classList.toggle("active", v === nome);
@@ -1171,6 +1196,7 @@ function mostrarView(nome){
 $("navLocalizar").addEventListener("click", () => mostrarView("localizar"));
 $("navAtualizar").addEventListener("click", () => mostrarView("atualizar"));
 $("navIncluir").addEventListener("click", () => mostrarView("incluir"));
+$("navDesconsiderados").addEventListener("click", () => mostrarView("desconsiderados"));
 $("navConfiguracoes").addEventListener("click", () => mostrarView("configuracoes"));
 $("navInicio").addEventListener("click", () => mostrarView("inicio"));
 </script>
@@ -2166,6 +2192,92 @@ window.__viewColumnDefaults.incluir = EXPORT_COLUMNS.map((c, i) => ({
 }));
 
 })();
+})();
+</script>
+
+<script>
+/* =========================================================================
+   Tela: Contas Desconsideradas (só consulta/exportação)
+   ========================================================================= */
+(function(){
+
+let dRows = [];
+
+async function carregar(){
+  $("d_emptyState").textContent = "Carregando...";
+  try{
+    const url = `${CONFIG.APPS_SCRIPT_URL}?action=decisions`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Falha ao buscar decisões: ${res.status}`);
+    dRows = await res.json();
+    if (dRows && dRows.erro) throw new Error(dRows.erro);
+    render();
+  } catch(err){
+    console.error(err);
+    $("d_emptyState").textContent = "Erro ao carregar: " + err.message;
+  }
+}
+
+function getFiltradas(){
+  const busca = $("d_fBusca").value.trim().toLowerCase();
+  if (!busca) return dRows;
+  return dRows.filter(r => `${r.Conta_ID} ${r.CNES}`.toLowerCase().includes(busca));
+}
+
+function render(){
+  const filtradas = getFiltradas();
+  $("d_emptyState").style.display = dRows.length ? "none" : "block";
+  $("d_mainTable").style.display = dRows.length ? "table" : "none";
+  $("d_summary").style.display = dRows.length ? "flex" : "none";
+  $("d_sumTotal").textContent = dRows.length;
+
+  const tbody = document.querySelector("#d_mainTable tbody");
+  tbody.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  filtradas.forEach(r => {
+    const tr = document.createElement("tr");
+    [r.Conta_ID, r.CNES, r.Data || "", r.Origem || ""].forEach(v => {
+      const td = document.createElement("td");
+      td.style.padding = "5px 10px";
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    frag.appendChild(tr);
+  });
+  tbody.appendChild(frag);
+}
+
+$("d_fBusca").addEventListener("input", render);
+$("d_btnAtualizar").addEventListener("click", carregar);
+
+$("d_btnExportXlsx").addEventListener("click", () => {
+  const linhas = getFiltradas().map(r => ({ Conta_ID: r.Conta_ID, CNES: r.CNES, Data: r.Data || "", Origem: r.Origem || "" }));
+  if (!linhas.length) return;
+  const ws = XLSX.utils.json_to_sheet(linhas, { header: ["Conta_ID","CNES","Data","Origem"] });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Desconsideradas");
+  const stamp = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `CONTAS_DESCONSIDERADAS_${stamp}.xlsx`);
+});
+
+$("d_btnExportCsv").addEventListener("click", () => {
+  const linhas = getFiltradas();
+  if (!linhas.length) return;
+  const cabecalho = ["Conta_ID","CNES","Data","Origem"];
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [cabecalho.join(";")].concat(
+    linhas.map(r => [esc(r.Conta_ID), esc(r.CNES), esc(r.Data || ""), esc(r.Origem || "")].join(";"))
+  ).join("\r\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0,10);
+  link.download = `CONTAS_DESCONSIDERADAS_${stamp}.csv`;
+  link.click();
+});
+
+carregar();
+
 })();
 </script>
 
